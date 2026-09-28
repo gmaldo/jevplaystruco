@@ -526,6 +526,12 @@ export function callEnvido(
     return state;
   }
 
+  // Once a truco bid was accepted the envido window is closed; "el envido
+  // va primero" only applies while the truco call is still pending.
+  if (state.trucoState.status === 'accepted') {
+    return state;
+  }
+
   if (
     state.envidoState.status !== 'pending' &&
     state.envidoState.status !== 'active'
@@ -929,6 +935,7 @@ export function canCallEnvido(state: MatchState, by: Player): boolean {
   ) {
     return false;
   }
+  if (state.trucoState.status === 'accepted') return false;
 
   if (state.phase === 'playing') {
     return state.turn === by;

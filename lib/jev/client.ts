@@ -336,6 +336,51 @@ export async function getJevDecision(
     const latencyMs = Date.now() - startTime;
     console.log(`[Jev Client] ✅ Respuesta live exitosa de ${endpoint} en ${latencyMs}ms`);
 
+    // The System One endpoint returns answers grouped under `answers`, each
+    // entry tagged with its question type. Normalize that envelope into the
+    // choices/nouls/scores groups parsed below; older endpoints may return
+    // them already grouped.
+    if (data.answers && typeof data.answers === 'object') {
+      const answers = data.answers as Record<
+        string,
+        {
+          type?: string;
+          choice?: string;
+          noul?: number;
+          score?: number;
+          legend?: Record<string, string>;
+        }
+      >;
+      data.choices = data.choices && typeof data.choices === 'object' ? data.choices : {};
+      data.nouls = data.nouls && typeof data.nouls === 'object' ? data.nouls : {};
+      data.scores = data.scores && typeof data.scores === 'object' ? data.scores : {};
+      for (const [k, item] of Object.entries(answers)) {
+        const type =
+          item?.type ||
+          (item && typeof item.choice === 'string'
+            ? 'choice'
+            : item && typeof item.noul === 'number'
+            ? 'noul'
+            : 'score');
+        if (type === 'choice') {
+          (data.choices as Record<string, unknown>)[k] = item;
+        } else if (type === 'noul') {
+          (data.nouls as Record<string, unknown>)[k] = item;
+        } else if (type === 'score') {
+          // Score answers arrive on the legend index scale (0..N-1);
+          // normalize to the 0-100 scale the rest of the pipeline expects.
+          const raw = typeof item?.score === 'number' ? item.score : 50;
+          const levels = Object.keys(item?.legend || {})
+            .map(Number)
+            .filter((n) => !Number.isNaN(n));
+          const maxLevel = levels.length > 0 ? Math.max(...levels) : 0;
+          const normalized =
+            maxLevel > 0 && raw <= maxLevel ? (raw / maxLevel) * 100 : raw;
+          (data.scores as Record<string, unknown>)[k] = { score: normalized };
+        }
+      }
+    }
+
     // Parse choices (keeping the full probability distribution when present)
     const choices: Record<
       string,

@@ -604,7 +604,12 @@ function decideOpeningCall(state: JevState): OpeningCallDecision {
   let summary = 'Jev pasa sin cantar en este turno y juega carta.';
 
   // 1. Envido initiation (when state.round === 1 && !state.envidoPlayed)
-  if (state.round === 1 && !state.envidoPlayed) {
+  // When the caller reported legal calls, an envido is only on the table if
+  // it was actually offered (e.g. it is not after an accepted truco).
+  const envidoOffered =
+    !state.availableCalls ||
+    state.availableCalls.some((c) => c.includes('envido'));
+  if (state.round === 1 && !state.envidoPlayed && envidoOffered) {
     if (state.mano === 'jev') {
       // Jev is mano
       if (envido >= 31) {

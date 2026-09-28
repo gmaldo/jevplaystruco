@@ -281,6 +281,38 @@ describe('Game Machine - Envido Flow', () => {
     assert.equal(s4.envidoState.status, 'declined');
     assert.equal(s4.envidoState.winner, 'jev');
   });
+
+  it('responder may call envido before answering a pending truco ("el envido va primero")', () => {
+    let state = startNewMatch(30);
+    state = callTruco(state, 'player');
+    assert.equal(state.phase, 'truco_called');
+
+    assert.equal(canCallEnvido(state, 'jev'), true);
+    state = callEnvido(state, 'jev', 'envido');
+    assert.equal(state.phase, 'envido_called');
+    assert.equal(state.envidoState.currentBid, 'envido');
+    assert.equal(state.envidoState.bidBy, 'jev');
+  });
+
+  it('envido cannot be called once a truco bid was accepted', () => {
+    let state = startNewMatch(30);
+    state = callTruco(state, 'player');
+    state = respondTruco(state, 'quiero');
+    assert.equal(state.phase, 'playing');
+    assert.equal(state.trucoState.status, 'accepted');
+
+    // Neither side may open or raise envido for the rest of the hand
+    assert.equal(canCallEnvido(state, 'player'), false);
+    assert.equal(canCallEnvido(state, 'jev'), false);
+    assert.deepEqual(getAvailableEnvidoBids(state, 'player'), []);
+    assert.deepEqual(getAvailableEnvidoBids(state, 'jev'), []);
+
+    const before = state;
+    state = callEnvido(state, 'jev', 'envido');
+    assert.equal(state, before); // no-op: state unchanged
+    state = callEnvido(state, 'player', 'envido');
+    assert.equal(state, before);
+  });
 });
 
 describe('Game Machine - Truco Flow', () => {
