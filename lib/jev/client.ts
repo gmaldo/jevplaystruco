@@ -65,6 +65,106 @@ export function formatQuestionsForSystemOne(
   return flat;
 }
 
+interface ParsedAnswers {
+  choices: Record<
+    string,
+    { choice: string; confidence: number; probabilities?: Record<string, number> }
+  >;
+  nouls: Record<string, { probability: number }>;
+  scores: Record<string, { score: number }>;
+}
+
+/**
+ * Composes the independent question answers in code (per System One
+ * guidance) instead of trusting a single broad choice blindly:
+ * - vetoes raises the "can we win" noul does not support;
+ * - overrides folds when the opponent is probably bluffing and the hand
+ *   is still winnable;
+ * - reroutes very low-confidence answers to the calibrated local
+ *   heuristic (confidence-gated routing).
+ */
+function applyCompositionAndRouting(
+  context: JevDecisionRequest['context'],
+  state: JevDecisionRequest['state'],
+  parsed: ParsedAnswers,
+  summary: string
+): ParsedAnswers & { summary: string } {
+  const notes: string[] = [];
+  const action =
+    parsed.choices.action ||
+    (context === 'play_card' ? parsed.choices.card : undefined);
+  if (!action) return { ...parsed, summary };
+
+  const isTrucoRaise = action.choice === 'retruco' || action.choice === 'vale_cuatro';
+  const isEnvidoRaise =
+    action.choice === 'real_envido' || action.choice === 'falta_envido';
+  const canWin =
+    context === 'respond_truco'
+      ? parsed.nouls.jev_can_win_hand?.probability
+      : parsed.nouls.jev_has_better_envido?.probability;
+  const opponentBluff = parsed.nouls.opponent_likely_bluffing?.probability;
+
+  if (
+    (context === 'respond_truco' || context === 'respond_envido') &&
+    typeof canWin === 'number'
+  ) {
+    if ((isTrucoRaise || isEnvidoRaise) && canWin < 0.3) {
+      notes.push(
+        `raise vetado por composición (prob. de ganar ${Math.round(canWin * 100)}%)`
+      );
+      action.choice = 'quiero';
+      action.confidence = Math.min(action.confidence, 0.6);
+    } else if (
+      action.choice === 'no_quiero' &&
+      canWin > 0.35 &&
+      typeof opponentBluff === 'number' &&
+      opponentBluff > 0.7
+    ) {
+      notes.push(
+        `no quiero revertido: el rival probablemente farolea (${Math.round(
+          opponentBluff * 100
+        )}%)`
+      );
+      action.choice = 'quiero';
+      action.confidence = Math.max(action.confidence, 0.55);
+    }
+  }
+
+  // Confidence-gated routing: a very unsure model answer is recalibrated
+  // with the deterministic local heuristic for the same context.
+  if (action.confidence < 0.45) {
+    const recalibrated = simulateJevDecision({ state, context });
+    const fallbackChoice =
+      recalibrated.choices?.action?.choice || recalibrated.choices?.card?.choice;
+    if (fallbackChoice) {
+      notes.push(
+        `baja confianza (${Math.round(action.confidence * 100)}%) → decisión recalibrada`
+      );
+      action.choice = fallbackChoice;
+      action.confidence = recalibrated.choices?.action?.confidence ?? 0.6;
+    }
+  }
+
+  const aliasKeys =
+    context === 'respond_envido'
+      ? ['envido_response']
+      : context === 'respond_truco'
+      ? ['truco_response']
+      : context === 'play_card'
+      ? ['card', 'play_card']
+      : [];
+  for (const key of aliasKeys) {
+    if (parsed.choices[key] !== action) {
+      parsed.choices[key] = { ...action };
+    }
+  }
+
+  return {
+    ...parsed,
+    summary: notes.length > 0 ? `${summary} • ${notes.join(' • ')}` : summary,
+  };
+}
+
 /**
  * Gets a decision from Jev:
  * - If apiKey or process.env (JEV_API_KEY || TYPESAFE_API_KEY) is available, calls OpenCode Zen / TypeSafe AI API with 5-second timeout.
@@ -151,14 +251,25 @@ export async function getJevDecision(
     const latencyMs = Date.now() - startTime;
     console.log(`[Jev Client] ✅ Respuesta live exitosa de ${endpoint} en ${latencyMs}ms`);
 
-    // Parse choices
-    const choices: Record<string, { choice: string; confidence: number }> = {};
+    // Parse choices (keeping the full probability distribution when present)
+    const choices: Record<
+      string,
+      { choice: string; confidence: number; probabilities?: Record<string, number> }
+    > = {};
     if (data.choices && typeof data.choices === 'object') {
       for (const [k, val] of Object.entries(data.choices)) {
-        const item = val as { choice?: string; confidence?: number };
+        const item = val as {
+          choice?: string;
+          confidence?: number;
+          probabilities?: Record<string, number>;
+        };
         choices[k] = {
           choice: item?.choice || '',
           confidence: typeof item?.confidence === 'number' ? item.confidence : 1.0,
+          probabilities:
+            item?.probabilities && typeof item.probabilities === 'object'
+              ? item.probabilities
+              : undefined,
         };
       }
     }
@@ -301,13 +412,20 @@ function generateLiveDecisionSummary(
       );
     }
 
+    const composed = applyCompositionAndRouting(
+      request.context,
+      enrichedState,
+      { choices, nouls, scores },
+      decisionSummary
+    );
+
     return {
       mode: 'live_api',
       latencyMs,
-      choices: Object.keys(choices).length > 0 ? choices : (data.choices || {}),
-      nouls: Object.keys(nouls).length > 0 ? nouls : (data.nouls || {}),
-      scores: Object.keys(scores).length > 0 ? scores : (data.scores || {}),
-      decisionSummary,
+      choices: Object.keys(composed.choices).length > 0 ? composed.choices : (data.choices || {}),
+      nouls: Object.keys(composed.nouls).length > 0 ? composed.nouls : (data.nouls || {}),
+      scores: Object.keys(composed.scores).length > 0 ? composed.scores : (data.scores || {}),
+      decisionSummary: composed.summary,
       questions,
       model: data.model || model,
       context: request.context,

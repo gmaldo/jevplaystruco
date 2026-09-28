@@ -1,9 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
+import http from 'node:http';
 import { getCard } from '../lib/truco/cards.ts';
 import { simulateJevDecision, buildQuestionsForContext } from '../lib/jev/simulator.ts';
-import { computeJevContext } from '../lib/jev/analysis.ts';
+import { computeJevContext, sampleChoiceFromProbabilities } from '../lib/jev/analysis.ts';
 import { getJevDecision, formatQuestionsForSystemOne } from '../lib/jev/client.ts';
 import { POST } from '../app/api/jev/decision/route.ts';
 
@@ -355,6 +356,148 @@ describe('Jev Decision Engine - Truco Responses', () => {
     }
     // High probability of no_quiero (>= 75%)
     assert.ok(noQuieroCount >= 38, `Expected at least 38/50 no_quiero, got ${noQuieroCount}`);
+  });
+});
+
+describe('Jev Decision Engine - Probabilities & Composition', () => {
+  it('emits a probability distribution over choice options', () => {
+    const state = {
+      hand: [getCard(1, 'espada'), getCard(3, 'copa'), getCard(4, 'oro')],
+      round: 1,
+      tableTricks: [],
+      currentBid: null,
+      trucoLevel: 0,
+      score: { player: 0, jev: 0, target: 30 },
+      mano: 'jev',
+    };
+
+    const decision = simulateJevDecision({ state, context: 'play_card' });
+    const cardResult = decision.choices.card;
+    assert.ok(cardResult.probabilities, 'card choice must carry probabilities');
+    const total = Object.values(cardResult.probabilities).reduce((s, p) => s + p, 0);
+    assert.ok(Math.abs(total - 1) < 0.001, `probabilities must sum to ~1, got ${total}`);
+    assert.equal(cardResult.probabilities[cardResult.choice], cardResult.confidence);
+  });
+
+  it('emits atomic nouls for respond_truco', () => {
+    const state = {
+      hand: [getCard(1, 'espada'), getCard(7, 'espada')],
+      round: 2,
+      tableTricks: [
+        { trickNumber: 1, playerCard: getCard(2, 'oro'), jevCard: getCard(3, 'copa'), winner: 'jev' },
+      ],
+      currentBid: { type: 'truco', offeredBy: 'player' },
+      score: { player: 0, jev: 0, target: 30 },
+      mano: 'player',
+    };
+
+    const decision = simulateJevDecision({ state, context: 'respond_truco' });
+    assert.ok(decision.nouls.jev_can_win_hand, 'must emit jev_can_win_hand');
+    assert.ok(decision.nouls.opponent_likely_bluffing, 'must emit opponent_likely_bluffing');
+    assert.ok(decision.nouls.jev_can_win_hand.probability > 0.5);
+  });
+
+  it('sampleChoiceFromProbabilities respects the distribution', () => {
+    const result = {
+      choice: 'a',
+      confidence: 0.9,
+      probabilities: { a: 0.9, b: 0.1 },
+    };
+    const always = sampleChoiceFromProbabilities(result, () => 0.5);
+    assert.equal(always, 'a');
+    const tail = sampleChoiceFromProbabilities(result, () => 0.95);
+    assert.equal(tail, 'b');
+    const noProbs = sampleChoiceFromProbabilities({ choice: 'x', confidence: 0.8 });
+    assert.equal(noProbs, 'x');
+  });
+
+  it('composes live answers: vetoes a raise when jev_can_win_hand is low', async () => {
+    const server = http.createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          choices: {
+            action: { choice: 'retruco', confidence: 0.9 },
+          },
+          nouls: {
+            jev_can_win_hand: { noul: 0.1 },
+            opponent_likely_bluffing: { noul: 0.1 },
+          },
+          scores: { hand_confidence: { score: 80 } },
+        })
+      );
+    });
+    await new Promise((resolve) => server.listen(0, resolve));
+    const port = server.address().port;
+
+    try {
+      const state = {
+        hand: [getCard(4, 'copa'), getCard(5, 'basto')],
+        round: 2,
+        tableTricks: [
+          { trickNumber: 1, playerCard: getCard(1, 'espada'), jevCard: getCard(6, 'oro'), winner: 'player' },
+        ],
+        currentBid: { type: 'truco', offeredBy: 'player' },
+        score: { player: 0, jev: 0, target: 30 },
+        mano: 'player',
+      };
+      const decision = await getJevDecision(
+        { state, context: 'respond_truco' },
+        'test-key',
+        { endpoint: `http://127.0.0.1:${port}/systemone` }
+      );
+      assert.equal(decision.mode, 'live_api');
+      assert.equal(
+        decision.choices.action.choice,
+        'quiero',
+        'raise must be vetoed when win probability is low'
+      );
+      assert.equal(decision.choices.truco_response.choice, 'quiero');
+    } finally {
+      server.close();
+    }
+  });
+
+  it('recalibrates a low-confidence live answer with the local heuristic', async () => {
+    const server = http.createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          choices: { action: { choice: 'no_quiero', confidence: 0.2 } },
+          nouls: {},
+          scores: {},
+        })
+      );
+    });
+    await new Promise((resolve) => server.listen(0, resolve));
+    const port = server.address().port;
+
+    try {
+      // Strong hand + won trick 1 → local heuristic accepts/raises.
+      const state = {
+        hand: [getCard(1, 'espada'), getCard(7, 'espada')],
+        round: 2,
+        tableTricks: [
+          { trickNumber: 1, playerCard: getCard(2, 'oro'), jevCard: getCard(3, 'copa'), winner: 'jev' },
+        ],
+        currentBid: { type: 'truco', offeredBy: 'player' },
+        score: { player: 0, jev: 0, target: 30 },
+        mano: 'player',
+      };
+      const decision = await getJevDecision(
+        { state, context: 'respond_truco' },
+        'test-key',
+        { endpoint: `http://127.0.0.1:${port}/systemone` }
+      );
+      assert.equal(decision.mode, 'live_api');
+      assert.notEqual(
+        decision.choices.action.choice,
+        'no_quiero',
+        'a 20%-confidence fold on a strong hand must be recalibrated'
+      );
+    } finally {
+      server.close();
+    }
   });
 });
 

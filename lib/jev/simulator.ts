@@ -1,6 +1,11 @@
 import type { Card } from '../truco/types.ts';
 import { calculateEnvido } from '../truco/cards.ts';
-import { getJevEnvidoCards, getPlayerCardOnTable } from './analysis.ts';
+import {
+  getJevEnvidoCards,
+  getPlayerCardOnTable,
+  choiceWithProbabilities,
+  estimateOpponentBluff,
+} from './analysis.ts';
 import type {
   JevDecisionRequest,
   JevDecisionResponse,
@@ -42,6 +47,14 @@ export function buildQuestionsForContext(
             instructions:
               'Would accepting or raising with weak envido points work as a bluff here, given `score` and `playerProfile`?',
           },
+          jev_has_better_envido: {
+            instructions:
+              'Is `computed.envidoPoints` likely high enough to beat the rival\'s envido (typical winning scores are 27+)?',
+          },
+          opponent_likely_bluffing: {
+            instructions:
+              'Is the rival\'s envido bet likely a bluff, given `score` pressure and `playerProfile`?',
+          },
         },
         scores: {
           hand_confidence: {
@@ -71,6 +84,14 @@ export function buildQuestionsForContext(
           bluffing_probability: {
             instructions:
               'Would accepting or raising with a weak hand work as a bluff, given `score` and `playerProfile`?',
+          },
+          jev_can_win_hand: {
+            instructions:
+              'Is `hand` likely to win this Truco hand, given `computed.cardRanks` and `computed.trickRecord`?',
+          },
+          opponent_likely_bluffing: {
+            instructions:
+              'Is the rival\'s Truco bet likely a bluff, given `score` pressure and `playerProfile`?',
           },
         },
         scores: {
@@ -241,14 +262,24 @@ function handleRespondEnvido(state: JevState): Omit<JevDecisionResponse, 'mode' 
   }
 
   const questions = buildQuestionsForContext('respond_envido', state);
+  const actionResult = choiceWithProbabilities(
+    choice,
+    confidence,
+    Object.keys(questions.choices?.action?.criteria || {})
+  );
 
   return {
     choices: {
-      action: { choice, confidence },
-      envido_response: { choice, confidence },
+      action: actionResult,
+      envido_response: actionResult,
     },
     nouls: {
       bluffing_probability: { probability: bluffingProb },
+      jev_has_better_envido: {
+        probability:
+          envido >= 31 ? 0.92 : envido >= 27 ? 0.62 : Math.max(0.05, envido / 40),
+      },
+      opponent_likely_bluffing: { probability: estimateOpponentBluff(state) },
     },
     scores: {
       hand_confidence: { score: handConfidence },
@@ -350,14 +381,21 @@ function handleRespondTruco(state: JevState): Omit<JevDecisionResponse, 'mode' |
   }
 
   const questions = buildQuestionsForContext('respond_truco', state);
+  const actionResult = choiceWithProbabilities(
+    choice,
+    confidence,
+    Object.keys(questions.choices?.action?.criteria || {})
+  );
 
   return {
     choices: {
-      action: { choice, confidence },
-      truco_response: { choice, confidence },
+      action: actionResult,
+      truco_response: actionResult,
     },
     nouls: {
       bluffing_probability: { probability: bluffingProb },
+      jev_can_win_hand: { probability: Math.min(0.99, handConfidence / 100) },
+      opponent_likely_bluffing: { probability: estimateOpponentBluff(state) },
     },
     scores: {
       hand_confidence: { score: handConfidence },
@@ -454,13 +492,25 @@ function handlePlayCard(state: JevState): Omit<JevDecisionResponse, 'mode' | 'la
   const avgRank = handDescending.reduce((acc, c) => acc + c.rank, 0) / handDescending.length;
   const handConfidence = Math.min(100, Math.round((avgRank / 14) * 100));
 
+  const cardResult = choiceWithProbabilities(
+    selectedCard.id,
+    confidence,
+    state.hand.map((c) => c.id)
+  );
+  const callChoice = shouldInitiateTruco ? 'truco' : 'none';
+  const callResult = choiceWithProbabilities(
+    callChoice,
+    shouldInitiateTruco ? 0.78 : 0.9,
+    ['truco', 'none']
+  );
+
   return {
     choices: {
-      action: { choice: selectedCard.id, confidence },
-      card: { choice: selectedCard.id, confidence },
-      play_card: { choice: selectedCard.id, confidence },
-      call: { choice: shouldInitiateTruco ? 'truco' : 'none', confidence: shouldInitiateTruco ? 0.78 : 0.90 },
-      call_truco: { choice: shouldInitiateTruco ? 'truco' : 'none', confidence: shouldInitiateTruco ? 0.78 : 0.90 },
+      action: cardResult,
+      card: cardResult,
+      play_card: cardResult,
+      call: callResult,
+      call_truco: callResult,
     },
     nouls: {
       call_truco: { probability: shouldInitiateTruco ? 0.82 : 0.12 },
@@ -702,11 +752,16 @@ function handleInitiateCall(state: JevState): Omit<JevDecisionResponse, 'mode' |
   }
 
   const questions = buildQuestionsForContext('initiate_call', state);
+  const actionResult = choiceWithProbabilities(
+    choice,
+    confidence,
+    Object.keys(questions.choices?.action?.criteria || {})
+  );
 
   return {
     choices: {
-      action: { choice, confidence },
-      call: { choice, confidence },
+      action: actionResult,
+      call: actionResult,
     },
     nouls: {
       bluffing_probability: { probability: bluffProb },

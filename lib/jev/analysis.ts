@@ -1,7 +1,7 @@
 import type { Card } from '../truco/types.ts';
 import { calculateEnvido } from '../truco/cards.ts';
 import { calculateFaltaEnvidoPoints } from '../truco/rules.ts';
-import type { JevComputedState, JevState } from './types.ts';
+import type { JevChoiceResult, JevComputedState, JevState } from './types.ts';
 
 /**
  * Extracts Jev's 3-card hand for envido calculation.
@@ -122,4 +122,59 @@ export function computeJevContext(state: JevState): JevComputedState {
     inBuenas,
     scorePressure,
   };
+}
+
+/**
+ * Builds a calibrated probability distribution over the options of a
+ * Choice question: the picked option takes `confidence`, the rest split
+ * the remainder uniformly.
+ */
+export function choiceWithProbabilities(
+  choice: string,
+  confidence: number,
+  options: string[]
+): JevChoiceResult {
+  const rest = options.filter((o) => o !== choice);
+  const share = rest.length > 0 ? Math.max(0, 1 - confidence) / rest.length : 0;
+  const probabilities: Record<string, number> = { [choice]: confidence };
+  for (const option of rest) probabilities[option] = share;
+  return { choice, confidence, probabilities };
+}
+
+/**
+ * Samples an option from a calibrated probability distribution instead of
+ * always taking the argmax. Produces a mixed strategy: the strong options
+ * remain most likely, but a predictable opponent cannot be exploited.
+ */
+export function sampleChoiceFromProbabilities(
+  result: JevChoiceResult,
+  rng: () => number = Math.random
+): string {
+  const probs = result.probabilities;
+  if (!probs) return result.choice;
+  const entries = Object.entries(probs).filter(([, p]) => p > 0);
+  if (entries.length === 0) return result.choice;
+  const total = entries.reduce((sum, [, p]) => sum + p, 0);
+  let roll = rng() * total;
+  for (const [option, p] of entries) {
+    roll -= p;
+    if (roll <= 0) return option;
+  }
+  return result.choice;
+}
+
+/**
+ * Heuristic estimate of how likely the rival's current bet is a bluff,
+ * from score desperation and the observed player profile.
+ */
+export function estimateOpponentBluff(state: JevState): number {
+  let probability = 0.12;
+  const { player, target } = state.score;
+  if (target - player <= 4) probability += 0.18; // desperate near the target
+  const profile = state.playerProfile;
+  if (profile && profile.handsPlayed >= 3) {
+    const aggression = profile.trucoCalls / profile.handsPlayed;
+    if (aggression > 0.6) probability += 0.15;
+  }
+  return Math.min(0.9, probability);
 }
