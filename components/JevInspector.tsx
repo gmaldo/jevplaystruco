@@ -26,6 +26,8 @@ interface HistoricalDecision {
   id: string;
   timestamp: string;
   round: number;
+  headline: string;
+  whyExplanation: string;
   summary: string;
   explanation: string;
   latencyMs: number;
@@ -34,6 +36,137 @@ interface HistoricalDecision {
   confidence?: number;
   bluffProb?: number;
   handStrength?: number;
+}
+
+function formatDecisionNarrative(params: {
+  summary?: string;
+  choices: HistoricalChoice[];
+  bluffProb?: number;
+  handStrength?: number;
+  latencyMs: number;
+  mode: string;
+  round: number;
+  context?: string;
+}): { headline: string; why: string } {
+  const { summary = '', choices, bluffProb, handStrength, latencyMs, mode, round, context } = params;
+
+  const cardChoice = choices.find((c) => c.key === 'card' || c.key === 'play_card');
+  const actionChoice = choices.find(
+    (c) => c.key === 'action' || c.key === 'envido_response' || c.key === 'truco_response'
+  );
+  const callChoice = choices.find((c) => c.key === 'call' || c.key === 'call_truco');
+
+  const strengthPart = typeof handStrength === 'number' ? Math.round(handStrength) : 50;
+  const bluffPart = typeof bluffProb === 'number' ? Math.round(bluffProb * 100) : 5;
+
+  // 1. Escenario: JUGADA DE CARTA ("se jugó el 4 con confidencia")
+  if (cardChoice && (context === 'play_card' || !actionChoice)) {
+    const confPct = Math.round(cardChoice.confidence * 100);
+    const cardName = cardChoice.formattedChoice;
+    const callPrefix = callChoice && callChoice.choice !== 'none' ? `[Canto: ${callChoice.formattedChoice}] ` : '';
+    const headline = `🃏 ${callPrefix}Se jugó el ${cardName} con ${confPct}% de confianza`;
+
+    let why = '';
+    if (summary && !summary.startsWith('Decisión Jev') && !summary.includes('live en') && summary !== 'Decisión ejecutada') {
+      why = `${summary} (Fuerza de mano estimada: ${strengthPart}/100, farol: ${bluffPart}%).`;
+    } else if (strengthPart >= 75) {
+      why = `Jev jugó el ${cardName} para ganar y asegurar la baza con carta alta, respaldado por una fuerza de mano de ${strengthPart}/100.`;
+    } else if (strengthPart <= 40) {
+      why = `Jev jugó el ${cardName} como descarte o tanteo con su naipe más bajo, protegiendo bazas futuras con fuerza de mano en ${strengthPart}/100.`;
+    } else {
+      why = `Jev administró el ${cardName} para disputar la ronda ${round} buscando controlar el desenlace de la mano (${strengthPart}/100 de fuerza).`;
+    }
+
+    return { headline, why };
+  }
+
+  // 2. Escenario: ENVIDO ("se cantó envido y el porqué")
+  const isEnvido =
+    context === 'respond_envido' ||
+    actionChoice?.choice === 'envido' ||
+    actionChoice?.choice === 'real_envido' ||
+    actionChoice?.choice === 'falta_envido' ||
+    actionChoice?.choice === 'envido_envido' ||
+    (summary.toLowerCase().includes('envido') && !!actionChoice);
+
+  if (isEnvido && actionChoice) {
+    const act = actionChoice.choice;
+    const confPct = Math.round(actionChoice.confidence * 100);
+
+    let headline = '';
+    let why = '';
+
+    if (act === 'no_quiero') {
+      headline = `🌾 Se rechazó el Envido • Respuesta de Jev: ¡NO QUIERO! ❌ (${confPct}% confianza)`;
+      why = `Jev rechazó el Envido porque evaluó que sus tantos no alcanzaban para superar al rival y prefirió no conceder puntos mayores (fuerza de tantos: ${strengthPart}/100, farol: ${bluffPart}%).`;
+    } else if (act === 'quiero') {
+      headline = `🌾 Se aceptó el Envido • Respuesta de Jev: ¡QUIERO! ✅ (${confPct}% confianza)`;
+      why = `Jev aceptó el Envido porque calculó una combinación de tantos alta y competitiva con amplias chances de triunfo (fuerza de tantos: ${strengthPart}/100).`;
+    } else if (act === 'real_envido' || act === 'falta_envido') {
+      const callName = act === 'real_envido' ? '¡REAL ENVIDO! 🌾' : '¡FALTA ENVIDO! 💥';
+      headline = `🌾 Se redobló el Envido • Respuesta de Jev: ${callName} (${confPct}% confianza)`;
+      why = `Jev redobló la apuesta porque poseía naipes excelentes del mismo palo (fuerza: ${strengthPart}/100) para definir puntos decisivos en el Envido.`;
+    } else {
+      headline = `🌾 Se cantó ${actionChoice.formattedChoice} (${confPct}% confianza)`;
+      why = `Jev tomó la iniciativa de cantar Envido en ronda 1 al ligar naipes favorables en su mano (fuerza: ${strengthPart}/100).`;
+    }
+
+    if (summary && !summary.startsWith('Decisión Jev') && !summary.includes('live en') && summary !== 'Decisión ejecutada') {
+      why = `${summary} • ${why}`;
+    }
+
+    return { headline, why };
+  }
+
+  // 3. Escenario: TRUCO ("se rechazó el truco y la respuesta de jev")
+  const isTruco =
+    context === 'respond_truco' ||
+    actionChoice?.choice === 'truco' ||
+    actionChoice?.choice === 'retruco' ||
+    actionChoice?.choice === 'vale_cuatro' ||
+    summary.toLowerCase().includes('truco');
+
+  if (isTruco && actionChoice) {
+    const act = actionChoice.choice;
+    const confPct = Math.round(actionChoice.confidence * 100);
+
+    let headline = '';
+    let why = '';
+
+    if (act === 'no_quiero') {
+      headline = `⚡ Se rechazó el Truco • Respuesta de Jev: ¡NO QUIERO! ❌ (${confPct}% confianza)`;
+      why = `Jev se fue al mazo y rechazó el Truco porque las cartas que le quedaban eran de jerarquía débil (fuerza de mano: ${strengthPart}/100) y el riesgo de perder más puntos era inaceptable.`;
+    } else if (act === 'quiero') {
+      headline = `⚡ Se aceptó el Truco • Respuesta de Jev: ¡QUIERO! ✅ (${confPct}% confianza)`;
+      why = `Jev aceptó el Truco porque disponía de cartas de jerarquía media/alta suficientes para disputar o rematar las bazas restantes (fuerza de mano: ${strengthPart}/100).`;
+    } else if (act === 'retruco' || act === 'vale_cuatro') {
+      const callName = act === 'retruco' ? '¡RETRUCO! 🔥' : '¡VALE CUATRO! ⚡';
+      headline = `⚡ Se redobló el Truco • Respuesta de Jev: ${callName} (${confPct}% confianza)`;
+      why = `Jev redobló la apuesta a ${act} respaldado por cartas mayores o bravas (fuerza de mano: ${strengthPart}/100) con el objetivo de maximizar puntos en la mano.`;
+    } else if (act === 'truco') {
+      headline = `⚡ Se cantó Truco por iniciativa de Jev (${confPct}% confianza)`;
+      why = `Jev cantó Truco al evaluar que sus naipes le otorgan ventaja estratégica en las bazas de la mano (fuerza: ${strengthPart}/100).`;
+    } else {
+      headline = `⚡ Se decidió ${actionChoice.formattedChoice}`;
+      why = `Jev evaluó la apuesta de Truco con fuerza de mano en ${strengthPart}/100 y ${bluffPart}% de probabilidad de farol.`;
+    }
+
+    if (summary && !summary.startsWith('Decisión Jev') && !summary.includes('live en') && summary !== 'Decisión ejecutada') {
+      why = `${summary} • ${why}`;
+    }
+
+    return { headline, why };
+  }
+
+  // Fallback
+  const primary = choices[0];
+  const confPct = primary ? Math.round(primary.confidence * 100) : 100;
+  const headline = primary
+    ? `Respuesta de Jev: ${primary.label} - ${primary.formattedChoice} (${confPct}% confianza)`
+    : summary || 'Decisión ejecutada';
+  const why = `Evaluación táctica en ronda ${round} con fuerza de mano en ${strengthPart}/100 (${mode === 'live_api' ? `Live API ${latencyMs}ms` : `Simulador ${latencyMs}ms`}).`;
+
+  return { headline, why };
 }
 
 function generateDecisionExplanation(params: {
@@ -264,10 +397,23 @@ export function JevInspector({
         summary = `Jev ejecuta ${primary.label}: ${primary.formattedChoice} (${Math.round((primary.confidence || 1) * 100)}% certeza) • ${item.mode === 'live_api' ? 'Live API' : 'Simulador'}`;
       }
 
+      const narrative = formatDecisionNarrative({
+        summary: item.decisionSummary,
+        choices,
+        bluffProb,
+        handStrength,
+        latencyMs: item.latencyMs,
+        mode: item.mode,
+        round: state.round,
+        context: item.context,
+      });
+
       return {
         id: `hist-${index}-${item.latencyMs}`,
         timestamp: `#${index + 1}`,
         round: state.round,
+        headline: narrative.headline,
+        whyExplanation: narrative.why,
         summary,
         explanation,
         latencyMs: item.latencyMs,
@@ -451,22 +597,28 @@ export function JevInspector({
               {decision ? (
                 <>
                   {/* Summary Card */}
-                  <div className="rounded-xl bg-stone-900 border border-cyan-800/40 p-3 shadow-md space-y-2">
+                  <div className="rounded-xl bg-stone-900 border border-cyan-800/40 p-3.5 shadow-md space-y-2.5">
                     <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-wider block">
-                      Resumen de Decisión
+                      Última Jugada de Jev
                     </span>
-                    <p className="text-sm font-serif font-bold text-stone-100">
-                      &quot;{decision.decisionSummary}&quot;
-                    </p>
-                    {historicalEntries[0]?.explanation && (
-                      <div className="p-2.5 rounded-lg bg-amber-950/20 border border-amber-900/40 text-xs text-stone-300 leading-relaxed font-sans space-y-1">
-                        <span className="text-amber-400 font-semibold text-[11px] flex items-center gap-1.5">
-                          <span>💡</span> Explicación táctica:
-                        </span>
-                        <p className="text-stone-300 leading-relaxed">
-                          {historicalEntries[0].explanation}
+                    {historicalEntries[0] ? (
+                      <>
+                        <p className="text-sm font-serif font-bold text-amber-200 leading-snug">
+                          {historicalEntries[0].headline}
                         </p>
-                      </div>
+                        <div className="p-2.5 rounded-lg bg-stone-950/80 border border-amber-900/30 text-xs text-stone-300 leading-relaxed font-sans space-y-1">
+                          <span className="text-amber-300 font-semibold text-[11px] flex items-center gap-1.5">
+                            <span>🔎</span> ¿Por qué?:
+                          </span>
+                          <p className="text-stone-300 leading-relaxed">
+                            {historicalEntries[0].whyExplanation}
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-sm font-serif font-bold text-stone-100">
+                        &quot;{decision.decisionSummary}&quot;
+                      </p>
                     )}
                   </div>
 
@@ -726,20 +878,28 @@ export function JevInspector({
                         </div>
                       </div>
 
-                      <p className="text-stone-200 text-xs font-medium leading-relaxed">{item.summary}</p>
+                      {/* Titular directo: "Se jugó el 4 de copa con 90% de confianza", "Se rechazó el Truco", etc. */}
+                      <div className="text-sm font-bold text-amber-200 leading-snug">
+                        {item.headline}
+                      </div>
 
-                      {/* Explicación de la jugada */}
+                      {/* Cuadro destacado: El Porqué */}
+                      <div className="p-2.5 rounded-lg bg-stone-950/90 border border-amber-900/40 space-y-1">
+                        <span className="text-[11px] font-semibold text-amber-300 flex items-center gap-1.5">
+                          <span>🔎</span> ¿Por qué?:
+                        </span>
+                        <p className="text-stone-300 text-xs leading-relaxed font-sans">
+                          {item.whyExplanation}
+                        </p>
+                      </div>
+
+                      {/* Detalle técnico de la inferencia */}
                       {item.explanation && (
-                        <div className="p-2.5 rounded-lg bg-amber-950/20 border border-amber-900/40 space-y-1">
-                          <div className="flex items-center justify-between text-[11px] font-semibold text-amber-300">
-                            <span className="flex items-center gap-1.5">
-                              <span>💡</span> Explicación de la jugada:
-                            </span>
-                            <span className="text-[10px] font-mono text-stone-400 font-normal">
-                              {item.mode === 'live_api' ? `Live (${item.latencyMs}ms)` : `Simulador (${item.latencyMs}ms)`}
-                            </span>
-                          </div>
-                          <p className="text-stone-300 text-xs leading-relaxed font-sans">
+                        <div className="p-2 rounded-lg bg-stone-950/40 border border-stone-800/80 text-[11px] text-stone-400 space-y-0.5 font-sans">
+                          <span className="text-stone-300 font-semibold text-[10px] block">
+                            💡 Detalle de inferencia:
+                          </span>
+                          <p className="leading-relaxed">
                             {item.explanation}
                           </p>
                         </div>

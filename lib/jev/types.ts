@@ -98,4 +98,5 @@ export interface JevDecisionResponse {
   decisionSummary: string;
   questions?: JevDecisionQuestions;
   model?: string;
+  context?: JevContext;
 }

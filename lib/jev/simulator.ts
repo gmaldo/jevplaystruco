@@ -548,6 +548,7 @@ export function simulateJevDecision(request: JevDecisionRequest): JevDecisionRes
   return {
     mode: 'local_simulator',
     latencyMs: simLatency,
+    context: request.context,
     ...partial,
   };
 }

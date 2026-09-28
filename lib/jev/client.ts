@@ -303,6 +303,7 @@ function generateLiveDecisionSummary(
       decisionSummary,
       questions,
       model: data.model || model,
+      context: request.context,
     };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
@@ -315,6 +316,7 @@ function generateLiveDecisionSummary(
       ...fallback,
       mode: 'local_simulator',
       model,
+      context: request.context,
     };
   }
 }

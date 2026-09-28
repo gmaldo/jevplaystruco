@@ -270,6 +270,7 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
             throw new Error(`Decision API status: ${response.status}`);
           }
           const dec = (await response.json()) as JevDecisionResponse;
+          dec.context = ctx;
           console.log(
             `[JevTruco] ✅ Respuesta recibida de API (${dec.mode}, ${dec.latencyMs}ms):`,
             dec.decisionSummary
@@ -280,7 +281,9 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
             `[JevTruco] ⚠️ Error en /api/jev/decision, usando fallback client:`,
             err instanceof Error ? err.message : err
           );
-          return getJevDecision({ state: st, context: ctx }, apiKey);
+          const fallbackDec = await getJevDecision({ state: st, context: ctx }, apiKey);
+          fallbackDec.context = ctx;
+          return fallbackDec;
         }
       };
 
@@ -331,8 +334,7 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
         // initChoice === 'none' o ilegal → se sigue a la decisión de carta (play_card) abajo.
       }
 
-      let decision: JevDecisionResponse;
-      decision = await fetchJevDecision(context, jevState);
+      const decision = await fetchJevDecision(context, jevState);
 
       if (activeRequestIdRef.current !== currentRequestId) {
         return;
