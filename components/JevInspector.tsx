@@ -14,6 +14,14 @@ export interface JevInspectorProps {
   className?: string;
 }
 
+interface HistoricalChoice {
+  key: string;
+  label: string;
+  choice: string;
+  formattedChoice: string;
+  confidence: number;
+}
+
 interface HistoricalDecision {
   id: string;
   timestamp: string;
@@ -21,10 +29,50 @@ interface HistoricalDecision {
   summary: string;
   latencyMs: number;
   mode: string;
-  actionChoice?: string;
+  choices: HistoricalChoice[];
   confidence?: number;
   bluffProb?: number;
   handStrength?: number;
+}
+
+function formatChoiceName(choiceKey: string, choiceVal: string): { label: string; text: string } {
+  if (choiceKey === 'card' || choiceKey === 'play_card') {
+    const match = choiceVal.match(/(?:card[-_])?(\d+)[-_](\w+)/);
+    if (match) {
+      const [, val, suit] = match;
+      const suitEmoji =
+        suit === 'espada' ? '⚔️' : suit === 'basto' ? '🌿' : suit === 'oro' ? '🪙' : '🍷';
+      return { label: 'Carta Jugada', text: `${val} de ${suit} ${suitEmoji}` };
+    }
+    return { label: 'Carta Jugada', text: choiceVal };
+  }
+
+  if (choiceKey === 'call' || choiceKey === 'call_truco') {
+    if (choiceVal === 'truco') return { label: 'Canto', text: '¡TRUCO! 📢' };
+    if (choiceVal === 'retruco') return { label: 'Canto', text: '¡RETRUCO! 🔥' };
+    if (choiceVal === 'vale_cuatro') return { label: 'Canto', text: '¡VALE CUATRO! ⚡' };
+    if (choiceVal === 'envido') return { label: 'Canto', text: '¡ENVIDO! 🌾' };
+    if (choiceVal === 'real_envido') return { label: 'Canto', text: '¡REAL ENVIDO! 🌾' };
+    if (choiceVal === 'falta_envido') return { label: 'Canto', text: '¡FALTA ENVIDO! 💥' };
+    if (choiceVal === 'none') return { label: 'Canto', text: 'Sin canto' };
+    return { label: 'Canto', text: choiceVal };
+  }
+
+  if (choiceKey === 'action' || choiceKey === 'envido_response' || choiceKey === 'truco_response') {
+    if (choiceVal === 'quiero') return { label: 'Respuesta', text: '¡QUIERO! ✅' };
+    if (choiceVal === 'no_quiero') return { label: 'Respuesta', text: '¡NO QUIERO! ❌' };
+    if (choiceVal === 'envido') return { label: 'Canto', text: '¡ENVIDO! 🌾' };
+    if (choiceVal === 'real_envido') return { label: 'Respuesta', text: '¡REAL ENVIDO! 🌾' };
+    if (choiceVal === 'falta_envido') return { label: 'Respuesta', text: '¡FALTA ENVIDO! 💥' };
+    if (choiceVal === 'envido_envido') return { label: 'Respuesta', text: '¡ENVIDO ENVIDO! 🌾' };
+    if (choiceVal === 'truco') return { label: 'Canto', text: '¡TRUCO! 📢' };
+    if (choiceVal === 'retruco') return { label: 'Respuesta', text: '¡QUIERO RETRUCO! 🔥' };
+    if (choiceVal === 'vale_cuatro') return { label: 'Respuesta', text: '¡QUIERO VALE CUATRO! ⚡' };
+    if (choiceVal === 'none') return { label: 'Acción', text: 'Pasar sin cantar ⏩' };
+    return { label: 'Respuesta', text: choiceVal };
+  }
+
+  return { label: choiceKey, text: choiceVal };
 }
 
 export function JevInspector({
@@ -43,22 +91,67 @@ export function JevInspector({
   const historicalEntries = useMemo<HistoricalDecision[]>(() => {
     const list = history.length > 0 ? history : decision ? [decision] : [];
     return list.map((item, index) => {
-      const action =
-        item.choices?.card?.choice ||
-        item.choices?.action?.choice ||
-        item.choices?.call?.choice ||
-        item.choices?.envido_response?.choice ||
-        item.choices?.truco_response?.choice;
+      const rawChoices = item.choices || {};
+      const chosenEntries: { key: string; val: { choice: string; confidence: number } }[] = [];
+
+      // Check card
+      if (rawChoices.card) {
+        chosenEntries.push({ key: 'card', val: rawChoices.card });
+      } else if (rawChoices.play_card) {
+        chosenEntries.push({ key: 'card', val: rawChoices.play_card });
+      }
+
+      // Check action (respond envido, respond truco, or initiate call)
+      if (rawChoices.action) {
+        chosenEntries.push({ key: 'action', val: rawChoices.action });
+      } else if (rawChoices.envido_response) {
+        chosenEntries.push({ key: 'action', val: rawChoices.envido_response });
+      } else if (rawChoices.truco_response) {
+        chosenEntries.push({ key: 'action', val: rawChoices.truco_response });
+      }
+
+      // Check call (if call was truco/retruco etc., or if it's not none)
+      const callVal = rawChoices.call || rawChoices.call_truco;
+      if (callVal && callVal.choice !== 'none' && !chosenEntries.some((e) => e.val.choice === callVal.choice)) {
+        chosenEntries.push({ key: 'call', val: callVal });
+      }
+
+      // If still empty, fall back to whatever is in rawChoices (unique by choice value)
+      if (chosenEntries.length === 0) {
+        const seenChoices = new Set<string>();
+        for (const [key, val] of Object.entries(rawChoices)) {
+          if (!seenChoices.has(val.choice)) {
+            seenChoices.add(val.choice);
+            chosenEntries.push({ key, val });
+          }
+        }
+      }
+
+      const choices: HistoricalChoice[] = chosenEntries.map(({ key, val }) => {
+        const formatted = formatChoiceName(key, val.choice);
+        return {
+          key,
+          label: formatted.label,
+          choice: val.choice,
+          formattedChoice: formatted.text,
+          confidence: val.confidence,
+        };
+      });
 
       const confidence =
-        item.choices?.card?.confidence ||
-        item.choices?.action?.confidence ||
+        choices[0]?.confidence ??
+        item.choices?.card?.confidence ??
+        item.choices?.action?.confidence ??
         item.choices?.call?.confidence;
 
       const bluffProb =
-        item.nouls?.bluff_call?.probability ?? item.nouls?.should_bluff?.probability;
+        item.nouls?.bluffing_probability?.probability ??
+        item.nouls?.bluff_call?.probability ??
+        item.nouls?.should_bluff?.probability;
 
-      const handStrength = item.scores?.hand_strength?.score;
+      const handStrength =
+        item.scores?.hand_confidence?.score ??
+        item.scores?.hand_strength?.score;
 
       return {
         id: `hist-${index}-${item.latencyMs}`,
@@ -67,7 +160,7 @@ export function JevInspector({
         summary: item.decisionSummary || 'Decisión ejecutada',
         latencyMs: item.latencyMs,
         mode: item.mode,
-        actionChoice: action,
+        choices,
         confidence,
         bluffProb,
         handStrength,
@@ -490,34 +583,81 @@ export function JevInspector({
               </span>
 
               {historicalEntries.length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {historicalEntries.map((item) => (
                     <div
                       key={item.id}
-                      className="p-2.5 rounded-xl bg-stone-900 border border-stone-800 space-y-1 text-xs"
+                      className="p-3 rounded-xl bg-stone-900/90 border border-stone-800 space-y-2 text-xs shadow-inner"
                     >
-                      <div className="flex items-center justify-between text-[10px] font-mono text-stone-400">
-                        <span>{item.timestamp} • Ronda {item.round}</span>
-                        <span className="text-cyan-300 font-bold">{item.latencyMs}ms</span>
+                      <div className="flex items-center justify-between text-[10px] font-mono text-stone-400 pb-1 border-b border-stone-800/60">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-stone-300 font-semibold">{item.timestamp}</span>
+                          <span>•</span>
+                          <span className="text-amber-400/90">Ronda {item.round}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-cyan-300 font-bold">{item.latencyMs}ms</span>
+                          <span className="text-stone-600">•</span>
+                          <span className="text-stone-400 text-[9px] uppercase">
+                            {item.mode === 'live_api' ? 'Live' : 'Simulador'}
+                          </span>
+                        </div>
                       </div>
-                      <p className="text-stone-200 font-medium">{item.summary}</p>
-                      <div className="flex flex-wrap gap-2 text-[10px] font-mono pt-1 text-stone-400">
-                        {item.actionChoice && (
-                          <span className="bg-stone-950 px-1.5 py-0.5 rounded text-amber-300 border border-stone-800">
-                            Acción: {item.actionChoice}
-                          </span>
-                        )}
-                        {item.confidence !== undefined && (
-                          <span className="bg-stone-950 px-1.5 py-0.5 rounded text-emerald-300 border border-stone-800">
-                            Conf: {Math.round(item.confidence * 100)}%
-                          </span>
-                        )}
-                        {item.bluffProb !== undefined && (
-                          <span className="bg-stone-950 px-1.5 py-0.5 rounded text-rose-300 border border-stone-800">
-                            Farol: {Math.round(item.bluffProb * 100)}%
-                          </span>
-                        )}
-                      </div>
+
+                      <p className="text-stone-200 text-xs font-medium leading-relaxed">{item.summary}</p>
+
+                      {/* Respuestas de la jugada y probabilidades */}
+                      {item.choices.length > 0 && (
+                        <div className="space-y-1.5 pt-0.5">
+                          {item.choices.map((c) => {
+                            const pct = typeof c.confidence === 'number' ? Math.round(c.confidence * 100) : 100;
+                            return (
+                              <div
+                                key={c.key}
+                                className="p-2 rounded-lg bg-stone-950/90 border border-stone-800/80 space-y-1"
+                              >
+                                <div className="flex items-center justify-between text-xs">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <span className="text-[10px] font-mono text-stone-400 uppercase shrink-0">
+                                      {c.label}:
+                                    </span>
+                                    <span className="font-semibold text-amber-300 truncate">
+                                      {c.formattedChoice}
+                                    </span>
+                                  </div>
+                                  <span className="text-[11px] font-mono font-bold text-emerald-400 shrink-0 ml-2">
+                                    {pct}% prob.
+                                  </span>
+                                </div>
+                                <div className="w-full bg-stone-900 h-1.5 rounded-full overflow-hidden border border-stone-800/50">
+                                  <div
+                                    className="bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 h-full rounded-full transition-all duration-300"
+                                    style={{ width: `${Math.min(100, Math.max(5, pct))}%` }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Métricas adicionales: Farol y Fuerza de mano */}
+                      {(item.bluffProb !== undefined || item.handStrength !== undefined) && (
+                        <div className="flex flex-wrap gap-2 text-[10px] font-mono pt-1">
+                          {item.bluffProb !== undefined && (
+                            <span className="bg-rose-950/30 text-rose-300 border border-rose-900/40 px-2 py-0.5 rounded-md flex items-center gap-1">
+                              <span>🎭 Farol:</span>
+                              <span className="font-bold">{Math.round(item.bluffProb * 100)}%</span>
+                            </span>
+                          )}
+                          {item.handStrength !== undefined && (
+                            <span className="bg-cyan-950/30 text-cyan-300 border border-cyan-900/40 px-2 py-0.5 rounded-md flex items-center gap-1">
+                              <span>💪 Fuerza:</span>
+                              <span className="font-bold">{Math.round(item.handStrength)}/100</span>
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
