@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import type { JevDecisionResponse } from '../lib/jev/types.ts';
+import type { JevChoiceResult, JevDecisionResponse } from '../lib/jev/types.ts';
 import type { MatchState } from '../lib/truco/types.ts';
 
 export interface JevInspectorProps {
@@ -327,6 +327,70 @@ function formatChoiceName(choiceKey: string, choiceVal: string): { label: string
   return { label: choiceKey, text: choiceVal };
 }
 
+/** Etiquetas en lenguaje natural para cada pregunta del motor. */
+const QUESTION_LABELS: Record<string, string> = {
+  action: 'La decisión de Jev',
+  card: 'Qué carta juega',
+  play_card: 'Qué carta juega',
+  call: 'Si canta o no',
+  call_truco: 'Si canta Truco',
+  opening_call: 'Si abre con un canto',
+  envido_response: 'Su respuesta al Envido',
+  truco_response: 'Su respuesta al Truco',
+};
+
+const NOUL_LABELS: Record<string, string> = {
+  bluffing_probability: '¿Jev está faroleando?',
+  opponent_likely_bluffing: '¿El rival probablemente farolea?',
+  jev_can_win_hand: '¿Jev puede ganar la mano?',
+  jev_has_better_envido: '¿Jev tiene mejores tantos?',
+  call_truco: '¿Conviene cantar Truco?',
+};
+
+const SCORE_LABELS: Record<string, string> = {
+  hand_confidence: 'Confianza en la mano',
+  hand_strength: 'Fuerza de las cartas',
+};
+
+const MODE_LABELS: Record<string, string> = {
+  live_api: 'En vivo',
+  local_simulator: 'Local',
+  deterministic: 'Regla',
+};
+
+/** Keys alias que representan la misma decisión (dedupe para el jugador). */
+const CHOICE_GROUPS: Record<string, string[]> = {
+  card: ['card', 'play_card'],
+  action: ['action', 'envido_response', 'truco_response'],
+  call: ['call', 'call_truco', 'opening_call'],
+};
+
+/** Deja una sola key canónica por decisión, eliminando aliases duplicados. */
+function primaryChoices(
+  choices: JevDecisionResponse['choices'] | undefined
+): Array<[string, JevChoiceResult]> {
+  if (!choices) return [];
+  const grouped = new Map<string, [string, JevChoiceResult]>();
+  for (const [key, val] of Object.entries(choices)) {
+    let canonical = key;
+    for (const [group, keys] of Object.entries(CHOICE_GROUPS)) {
+      if (keys.includes(key)) canonical = group;
+    }
+    // Preferir la key canónica exacta; si no existe, quedarse con el primer alias visto.
+    if (!grouped.has(canonical) || key === canonical) {
+      grouped.set(canonical, [key, val]);
+    }
+  }
+  return [...grouped.values()];
+}
+
+function friendlyChoiceLabel(key: string): string {
+  for (const keys of Object.values(CHOICE_GROUPS)) {
+    if (keys.includes(key)) return QUESTION_LABELS[keys[0]] ?? key;
+  }
+  return QUESTION_LABELS[key] ?? key;
+}
+
 export function JevInspector({
   decision,
   state,
@@ -517,7 +581,7 @@ export function JevInspector({
                 </span>
               </div>
               <p className="text-[11px] text-stone-400">
-                Inferencia System One en milisegundos
+                Cómo piensa Jev, jugada por jugada
               </p>
             </div>
           </div>
@@ -543,31 +607,30 @@ export function JevInspector({
         <div className="px-4 py-2.5 bg-stone-900/60 border-b border-stone-800/80 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
           {/* Mode Badge */}
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-stone-400">Modo:</span>
             {decision?.mode === 'live_api' ? (
               <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700/60 text-[10px] font-bold flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Live API ({decision?.model || 'jev-1.13-free'})
+                Jev pensando en vivo
+              </span>
+            ) : decision?.mode === 'deterministic' ? (
+              <span className="px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-700/60 text-[10px] font-bold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                Jugada de manual
               </span>
             ) : (
               <span className="px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-700/60 text-[10px] font-bold flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                Simulador Local Jev
+                Jev local (sin conexión)
               </span>
             )}
           </div>
 
-          {/* Model & Latency Badges */}
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 text-[10px] font-mono">
-              {decision?.model || 'jev-1.13-free'}
+          {/* Latency Badge */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-stone-400">Pensó en:</span>
+            <span className="px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-700/60 text-[10px] font-bold font-mono">
+              ⚡ {decision?.latencyMs ?? 0} ms
             </span>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-stone-400">Latencia:</span>
-              <span className="px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-700/60 text-[10px] font-bold font-mono">
-                ⚡ {decision?.latencyMs ?? 0} ms
-              </span>
-            </div>
           </div>
         </div>
 
@@ -591,7 +654,7 @@ export function JevInspector({
                 : 'border-transparent text-stone-400 hover:text-stone-200'
             }`}
           >
-            Preguntas
+            Qué evaluó Jev
           </button>
           <button
             onClick={() => setActiveTab('state')}
@@ -601,7 +664,7 @@ export function JevInspector({
                 : 'border-transparent text-stone-400 hover:text-stone-200'
             }`}
           >
-            Estado JSON
+            La Mesa
           </button>
           <button
             onClick={() => setActiveTab('history')}
@@ -649,24 +712,25 @@ export function JevInspector({
                   </div>
 
                   {/* Choice Confidence Meters */}
-                  {decision.choices && Object.keys(decision.choices).length > 0 && (
+                  {primaryChoices(decision.choices).length > 0 && (
                     <div className="rounded-xl bg-stone-900 border border-stone-800 p-3 space-y-3">
                       <span className="text-[10px] font-mono text-amber-400 uppercase tracking-wider block">
-                        Choice (Selección Discreta)
+                        Qué decidió
                       </span>
-                      {Object.entries(decision.choices).map(([key, val]) => {
+                      {primaryChoices(decision.choices).map(([key, val]) => {
                         const pct = Math.round(val.confidence * 100);
+                        const formatted = formatChoiceName(key, val.choice);
                         return (
                           <div key={key} className="space-y-1">
                             <div className="flex items-center justify-between text-xs">
-                              <span className="font-mono text-stone-300">
-                                {key}:{' '}
+                              <span className="text-stone-300">
+                                {friendlyChoiceLabel(key)}:{' '}
                                 <strong className="text-amber-300 font-serif">
-                                  {val.choice}
+                                  {formatted.text}
                                 </strong>
                               </span>
                               <span className="font-mono text-stone-400 font-bold">
-                                {pct}% confianza
+                                {pct}% seguro
                               </span>
                             </div>
                             <div className="w-full bg-stone-950 rounded-full h-2 overflow-hidden border border-stone-800">
@@ -685,22 +749,22 @@ export function JevInspector({
                   {decision.nouls && Object.keys(decision.nouls).length > 0 && (
                     <div className="rounded-xl bg-stone-900 border border-stone-800 p-3 space-y-3">
                       <span className="text-[10px] font-mono text-rose-400 uppercase tracking-wider block">
-                        Noul (Probabilidad Calibrada de Farol)
+                        Lecturas de la situación
                       </span>
                       {Object.entries(decision.nouls).map(([key, val]) => {
                         const pct = Math.round(val.probability * 100);
                         return (
                           <div key={key} className="space-y-1">
                             <div className="flex items-center justify-between text-xs">
-                              <span className="font-mono text-stone-300">
-                                {key}
+                              <span className="text-stone-300">
+                                {NOUL_LABELS[key] ?? key}
                               </span>
                               <span
                                 className={`font-mono font-bold ${
                                   pct > 50 ? 'text-rose-400' : 'text-emerald-400'
                                 }`}
                               >
-                                {pct}% probabilidad
+                                {pct}% sí
                               </span>
                             </div>
                             <div className="w-full bg-stone-950 rounded-full h-2 overflow-hidden border border-stone-800">
@@ -723,19 +787,19 @@ export function JevInspector({
                   {decision.scores && Object.keys(decision.scores).length > 0 && (
                     <div className="rounded-xl bg-stone-900 border border-stone-800 p-3 space-y-3">
                       <span className="text-[10px] font-mono text-blue-400 uppercase tracking-wider block">
-                        Score (Fuerza de Mano Percibida)
+                        Fuerza que percibe
                       </span>
                       {Object.entries(decision.scores).map(([key, val]) => {
                         const scoreVal = val.score;
-                        const pct = Math.min(100, Math.round(scoreVal * 10));
+                        const pct = Math.min(100, Math.max(0, Math.round(scoreVal)));
                         return (
                           <div key={key} className="space-y-1">
                             <div className="flex items-center justify-between text-xs">
-                              <span className="font-mono text-stone-300">
-                                {key}
+                              <span className="text-stone-300">
+                                {SCORE_LABELS[key] ?? key}
                               </span>
                               <span className="font-mono font-bold text-blue-300">
-                                {scoreVal.toFixed(1)} / 10.0
+                                {Math.round(scoreVal)} / 100
                               </span>
                             </div>
                             <div className="w-full bg-stone-950 rounded-full h-2 overflow-hidden border border-stone-800">
@@ -899,7 +963,7 @@ export function JevInspector({
                           <span className="text-cyan-300 font-bold">{item.latencyMs}ms</span>
                           <span className="text-stone-600">•</span>
                           <span className="text-stone-400 text-[9px] uppercase">
-                            {item.mode === 'live_api' ? 'Live' : 'Simulador'}
+                            {MODE_LABELS[item.mode] ?? item.mode}
                           </span>
                         </div>
                       </div>
@@ -997,7 +1061,7 @@ export function JevInspector({
 
         {/* Panel Footer */}
         <div className="p-3 border-t border-stone-800 bg-stone-950 flex items-center justify-between text-[11px] text-stone-400">
-          <span>Jev AI • Modelo {decision?.model || 'jev-1.13-free'} (System One)</span>
+          <span>Jev AI • Cómo piensa el rival</span>
           <button
             onClick={onOpenSettings}
             className="text-cyan-400 hover:text-cyan-300 font-mono underline cursor-pointer"
