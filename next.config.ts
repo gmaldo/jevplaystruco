@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  allowedDevOrigins: [
+    "bra-statutes-art-block.trycloudflare.com",
+    "192.168.1.217",
+  ],
 };
 
 export default nextConfig;
