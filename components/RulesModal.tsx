@@ -145,11 +145,11 @@ export function RulesModal({ isOpen, onClose }: RulesModalProps) {
 
           <hr className="border-stone-800" />
 
-          {/* 4. IA Jev (TypeSafe AI) */}
+          {/* 4. IA Jev */}
           <div className="space-y-2">
             <h4 className="font-serif font-bold text-sm text-cyan-300 flex items-center gap-1.5">
               <span>🤖</span>
-              <span>¿Cómo funciona el rival Jev (TypeSafe AI)?</span>
+              <span>¿Cómo funciona el rival Jev?</span>
             </h4>
             <p className="leading-relaxed">
               A diferencia de los modelos LLM de chat convencionales que devuelven texto libre y tardan varios segundos,

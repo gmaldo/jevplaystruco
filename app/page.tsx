@@ -67,7 +67,7 @@ export default function Home() {
                     JevTruco
                   </h1>
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-800/60">
-                    OpenCode Zen
+                    IA Rival
                   </span>
                 </div>
                 <p className="text-[10px] text-stone-400">
@@ -113,7 +113,7 @@ export default function Home() {
                   JevTruco
                 </h1>
                 <span className="text-[9px] sm:text-[10px] font-mono font-bold bg-cyan-950 text-cyan-300 border border-cyan-700/60 px-1.5 py-0.2 rounded-full hidden xs:inline-block">
-                  TypeSafe AI
+                  System One
                 </span>
               </div>
               <p className="text-[10px] sm:text-[11px] text-stone-400 font-sans hidden md:block">
@@ -156,7 +156,7 @@ export default function Home() {
             <button
               onClick={() => setIsSettingsOpen(true)}
               className="px-2 py-1.5 sm:px-3 sm:py-1.5 min-h-[36px] sm:min-h-[40px] touch-manipulation rounded-xl bg-stone-900 hover:bg-stone-800 active:bg-stone-700 text-stone-300 hover:text-white border border-stone-800 text-xs font-serif font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
-              title="Ajustes de partida y API Key"
+              title="Ajustes de la partida"
             >
               <span>⚙️</span>
               <span className="hidden sm:inline">Ajustes</span>

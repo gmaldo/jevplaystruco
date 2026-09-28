@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import { sounds } from '../lib/sound/audio.ts';
 
 export interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  apiKey: string;
-  onSaveApiKey: (key: string) => void;
+  apiKey?: string;
+  onSaveApiKey?: (key: string) => void;
   targetScore: 15 | 30;
   onChangeTargetScore: (target: 15 | 30) => void;
   soundEnabled: boolean;
@@ -17,36 +17,12 @@ export interface SettingsModalProps {
 export function SettingsModal({
   isOpen,
   onClose,
-  apiKey,
-  onSaveApiKey,
   targetScore,
   onChangeTargetScore,
   soundEnabled,
   onToggleSound,
 }: SettingsModalProps) {
-  const [inputKey, setInputKey] = useState(apiKey || '');
-  const [prevApiKey, setPrevApiKey] = useState(apiKey);
-  const [showKey, setShowKey] = useState(false);
-  const [savedSuccess, setSavedSuccess] = useState(false);
-
-  if (apiKey !== prevApiKey) {
-    setPrevApiKey(apiKey);
-    setInputKey(apiKey || '');
-  }
-
   if (!isOpen) return null;
-
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSaveApiKey(inputKey.trim());
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2000);
-  };
-
-  const handleClearKey = () => {
-    setInputKey('');
-    onSaveApiKey('');
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-150">
@@ -69,96 +45,7 @@ export function SettingsModal({
 
         {/* Body */}
         <div className="p-5 space-y-5 text-xs text-stone-300">
-          {/* Section 1: Server-side OpenCode Zen / Jev Config */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="font-mono text-cyan-300 uppercase font-bold text-[11px] flex items-center gap-1.5">
-                <span>🛡️</span>
-                <span>Configuración de Servidor Jev</span>
-              </label>
-              <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
-                ✓ Protegida en Servidor
-              </span>
-            </div>
-
-            <p className="text-[11px] text-stone-400">
-              La API Key y la conexión con OpenCode Zen se gestionan de forma segura en el backend mediante <code className="text-amber-300 font-mono bg-stone-900 px-1 py-0.5 rounded">.env.local</code> sin exponer credenciales en el navegador.
-            </p>
-
-            {/* Endpoint & Model Info */}
-            <div className="rounded-xl bg-stone-900/90 border border-stone-800 p-2.5 space-y-1.5 font-mono text-[11px]">
-              <div className="flex items-center justify-between text-stone-400">
-                <span>Endpoint Servidor:</span>
-                <span className="text-cyan-300 font-semibold truncate max-w-[220px]">
-                  https://opencode.ai/zen/v1/systemone
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-stone-400">
-                <span>Modelo:</span>
-                <span className="text-amber-300 font-semibold">jev-1.13-free</span>
-              </div>
-              <div className="flex items-center justify-between text-stone-400">
-                <span>API Key:</span>
-                <span className="text-emerald-400 font-semibold">Cargada en backend (.env.local)</span>
-              </div>
-            </div>
-
-            {/* Optional client-side override */}
-            <div className="pt-1">
-              <details className="text-[11px] text-stone-400">
-                <summary className="cursor-pointer hover:text-stone-300 font-mono text-[10px] text-stone-500">
-                  Sobrescribir clave temporalmente (opcional)
-                </summary>
-                <form onSubmit={handleSave} className="space-y-2 mt-2">
-                  <div className="relative">
-                    <input
-                      type={showKey ? 'text' : 'password'}
-                      value={inputKey}
-                      onChange={(e) => setInputKey(e.target.value)}
-                      placeholder="Dejar vacío para usar clave del servidor"
-                      className="w-full px-3 py-2 rounded-xl bg-stone-900 border border-stone-700 text-stone-100 font-mono text-xs focus:outline-hidden focus:border-cyan-500 pr-16"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowKey((v) => !v)}
-                      className="absolute right-2 top-2 text-[10px] text-stone-400 hover:text-stone-200 px-1.5 py-0.5 rounded cursor-pointer"
-                    >
-                      {showKey ? 'Ocultar' : 'Ver'}
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex gap-2">
-                      <button
-                        type="submit"
-                        className="px-3 py-1 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white font-mono font-bold text-xs transition-colors cursor-pointer"
-                      >
-                        Aplicar
-                      </button>
-                      {inputKey && (
-                        <button
-                          type="button"
-                          onClick={handleClearKey}
-                          className="px-2 py-1 rounded-lg bg-stone-900 hover:bg-stone-800 text-stone-400 font-mono text-xs transition-colors cursor-pointer"
-                        >
-                          Restablecer a servidor
-                        </button>
-                      )}
-                    </div>
-                    {savedSuccess && (
-                      <span className="text-emerald-400 font-mono text-[10px] animate-in fade-in">
-                        ✓ Guardado
-                      </span>
-                    )}
-                  </div>
-                </form>
-              </details>
-            </div>
-          </div>
-
-          <hr className="border-stone-800" />
-
-          {/* Section 2: Match Target Score (15 vs 30 points) */}
+          {/* Límite de Puntos del Partido (15 vs 30 points) */}
           <div className="space-y-2">
             <label className="font-mono text-amber-300 uppercase font-bold text-[11px] flex items-center gap-1.5">
               <span>🎯</span>
@@ -199,7 +86,7 @@ export function SettingsModal({
 
           <hr className="border-stone-800" />
 
-          {/* Section 3: Sound Effects Toggle */}
+          {/* Sound Effects Toggle */}
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <label className="font-mono text-stone-200 font-bold text-xs flex items-center gap-1.5">

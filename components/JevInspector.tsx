@@ -136,7 +136,7 @@ export function JevInspector({
                   Jev Inspector
                 </h3>
                 <span className="text-[10px] bg-cyan-950 text-cyan-400 border border-cyan-700/60 px-1.5 py-0.2 rounded font-mono">
-                  OpenCode Zen ({decision?.model || 'jev-1.13-free'})
+                  Jev AI ({decision?.model || 'jev-1.13-free'})
                 </span>
               </div>
               <p className="text-[11px] text-stone-400">
@@ -149,7 +149,7 @@ export function JevInspector({
             <button
               onClick={onOpenSettings}
               className="p-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 text-stone-300 hover:text-white border border-stone-700 text-xs transition-colors cursor-pointer"
-              title="Configurar API Key de OpenCode Zen / TypeSafe Jev"
+              title="Ajustes de la partida"
             >
               ⚙️
             </button>
@@ -170,7 +170,7 @@ export function JevInspector({
             {decision?.mode === 'live_api' ? (
               <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700/60 text-[10px] font-bold flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Live API (OpenCode Zen - {decision?.model || 'jev-1.13-free'})
+                Live API ({decision?.model || 'jev-1.13-free'})
               </span>
             ) : (
               <span className="px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-700/60 text-[10px] font-bold flex items-center gap-1">
@@ -369,7 +369,7 @@ export function JevInspector({
           {activeTab === 'schema' && (
             <div className="space-y-3">
               <p className="text-stone-400 text-xs">
-                Preguntas formuladas a OpenCode Zen / TypeSafe Jev con esquemas estructurados:
+                Preguntas formuladas a Jev con esquemas estructurados:
               </p>
 
               {decision?.questions ? (
@@ -532,12 +532,12 @@ export function JevInspector({
 
         {/* Panel Footer */}
         <div className="p-3 border-t border-stone-800 bg-stone-950 flex items-center justify-between text-[11px] text-stone-400">
-          <span>OpenCode Zen • Modelo {decision?.model || 'jev-1.13-free'} (System One)</span>
+          <span>Jev AI • Modelo {decision?.model || 'jev-1.13-free'} (System One)</span>
           <button
             onClick={onOpenSettings}
             className="text-cyan-400 hover:text-cyan-300 font-mono underline cursor-pointer"
           >
-            Configurar API Key
+            Ajustes
           </button>
         </div>
       </div>
