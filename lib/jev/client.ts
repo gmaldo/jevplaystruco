@@ -56,7 +56,7 @@ export async function getJevDecision(
       decisionSummary: data.decisionSummary || `Decisión TypeSafe AI live en ${latencyMs}ms`,
       questions: data.questions || questions,
     };
-  } catch (_error) {
+  } catch {
     // Graceful fallback to calibrated local simulator
     const fallback = simulateJevDecision(request);
     return {

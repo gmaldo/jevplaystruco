@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Card, Player } from './types.ts';
+import type { Card, EnvidoCall, TrucoCall } from './types.ts';
 import type {
   JevDecisionRequest,
   JevDecisionResponse,
@@ -46,6 +46,7 @@ export interface UseTrucoGameReturn {
   restartMatch: (target?: 15 | 30) => void;
   setApiKey: (key: string) => void;
   apiKey: string;
+  decisionHistory: JevDecisionResponse[];
   availableEnvidoBids: EnvidoBid[];
   availableTrucoBid: TrucoBid | null;
   canPlay: boolean;
@@ -57,18 +58,14 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
   const [state, setState] = useState<MatchState>(() =>
     startNewMatch(initialTarget)
   );
-  const [apiKey, setApiKey] = useState<string>('');
-  const isExecutingJevRef = useRef<boolean>(false);
-
-  // Load saved API key from localStorage on mount
-  useEffect(() => {
+  const [apiKey, setApiKey] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      const savedKey = localStorage.getItem('TYPESAFE_API_KEY');
-      if (savedKey) {
-        setApiKey(savedKey);
-      }
+      return localStorage.getItem('TYPESAFE_API_KEY') || '';
     }
-  }, []);
+    return '';
+  });
+  const [decisionHistory, setDecisionHistory] = useState<JevDecisionResponse[]>([]);
+  const isExecutingJevRef = useRef<boolean>(false);
 
   const handleSetApiKey = useCallback((key: string) => {
     setApiKey(key);
@@ -118,6 +115,7 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
 
   const restartMatchAction = useCallback(
     (target?: 15 | 30) => {
+      setDecisionHistory([]);
       setState(startNewMatch(target || initialTarget));
     },
     [initialTarget]
@@ -215,7 +213,7 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
                 type:
                   state.envidoState.currentBid === 'none'
                     ? null
-                    : (state.envidoState.currentBid as any),
+                    : (state.envidoState.currentBid as EnvidoCall),
                 offeredBy: state.envidoState.bidBy || null,
               }
             : state.phase === 'truco_called'
@@ -223,7 +221,7 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
                 type:
                   state.trucoState.currentBid === 'none'
                     ? null
-                    : (state.trucoState.currentBid as any),
+                    : (state.trucoState.currentBid as TrucoCall),
                 offeredBy: state.trucoState.bidBy || null,
                 level:
                   state.trucoState.currentBid === 'truco'
@@ -272,7 +270,7 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
           throw new Error(`Decision API status: ${response.status}`);
         }
         decision = await response.json();
-      } catch (_err) {
+      } catch {
         // Graceful fallback to client simulator
         decision = await getJevDecision({ state: jevState, context }, apiKey);
       }
@@ -281,6 +279,8 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
         isExecutingJevRef.current = false;
         return;
       }
+
+      setDecisionHistory((prev) => [decision, ...prev.slice(0, 29)]);
 
       // Apply decision to state machine
       setState((current) => {
@@ -355,6 +355,7 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
     restartMatch: restartMatchAction,
     setApiKey: handleSetApiKey,
     apiKey,
+    decisionHistory,
     availableEnvidoBids: getAvailableEnvidoBids(state, 'player'),
     availableTrucoBid: getAvailableTrucoBid(state, 'player'),
     canPlay: canPlayCard(state, 'player'),

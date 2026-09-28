@@ -244,12 +244,8 @@ function handleRespondTruco(state: JevState): Omit<JevDecisionResponse, 'mode' |
   const highCards = remainingCards.filter((c) => c.rank >= 10);
 
   let jevTrickWins = 0;
-  let playerTrickWins = 0;
-  let ties = 0;
   for (const t of state.tableTricks) {
     if (t.winner === 'jev') jevTrickWins++;
-    else if (t.winner === 'player') playerTrickWins++;
-    else if (t.winner === 'tie') ties++;
   }
   const trick1Winner = state.tableTricks[0]?.winner;
   const isMano = state.mano === 'jev';
@@ -471,7 +467,7 @@ function handleInitiateCall(state: JevState): Omit<JevDecisionResponse, 'mode' |
 
   let choice = 'none';
   let confidence = 0.85;
-  let bluffProb = 0.05;
+  const bluffProb = 0.05;
   let handConfidence = 50;
   let summary = 'Jev pasa sin cantar en este turno.';
 
@@ -546,7 +542,8 @@ export function simulateJevDecision(request: JevDecisionRequest): JevDecisionRes
   }
 
   // Realistic System One latency simulation: 12-25ms
-  const simLatency = Math.floor(Math.random() * 14) + 12;
+  const elapsed = Date.now() - startTime;
+  const simLatency = Math.max(elapsed, Math.floor(Math.random() * 14) + 12);
 
   return {
     mode: 'local_simulator',

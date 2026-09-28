@@ -285,7 +285,7 @@ export function playPlayerCard(state: MatchState, card: Card): MatchState {
 
   // Update table trick
   const table = [...state.table];
-  let trickIndex = table.findIndex((t) => t.round === state.round);
+  const trickIndex = table.findIndex((t) => t.round === state.round);
   let trick: TableTrick;
 
   if (trickIndex >= 0) {
@@ -399,7 +399,7 @@ export function playJevCard(state: MatchState, card: Card): MatchState {
 
   // Update table trick
   const table = [...state.table];
-  let trickIndex = table.findIndex((t) => t.round === state.round);
+  const trickIndex = table.findIndex((t) => t.round === state.round);
   let trick: TableTrick;
 
   if (trickIndex >= 0) {
