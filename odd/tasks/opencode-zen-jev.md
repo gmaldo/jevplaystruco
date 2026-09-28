@@ -8,9 +8,7 @@ JevTruco utilizaba valores por defecto apuntando a la API de TypeSafe AI sin mod
 
 ## Scope & Constraints
 - **Endpoint por defecto:** `https://opencode.ai/zen/v1/systemone`
-- **Modelo por defecto:** `jev-1.13-free`
-- **API Key por defecto:** (servidor .env.local)``
-- **Variables de entorno:** `.env.local` con `JEV_API_KEY`, `TYPESAFE_API_KEY`, `JEV_ENDPOINT`, `JEV_MODEL`.
+- **API Key:** Configurada de forma segura exclusivamente en `.env.local` en el backend (no expuesta al cliente ni versionada)
 - **Compatibilidad:** Mantener compatibilidad hacia atrás con `TYPESAFE_API_KEY` y modo simulador local.
 - **Tests & Build:** Garantizar que los 70 tests pasen, ESLint pase con 0 errores y `npm run build` sea exitoso.
 - **Engram Mirror:** `odd/opencode-zen-jev/tasks` (status: pending - MCP unavailable in environment).

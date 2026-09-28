@@ -3,7 +3,6 @@ import { simulateJevDecision, buildQuestionsForContext } from './simulator.ts';
 
 const DEFAULT_ENDPOINT = 'https://opencode.ai/zen/v1/systemone';
 const DEFAULT_MODEL = 'jev-1.13-free';
-const DEFAULT_API_KEY = '';
 
 export interface JevDecisionOptions {
   endpoint?: string;
@@ -46,8 +45,7 @@ export async function getJevDecision(
     apiKey ||
     (typeof process !== 'undefined'
       ? process.env.JEV_API_KEY || process.env.TYPESAFE_API_KEY
-      : undefined) ||
-    DEFAULT_API_KEY;
+      : undefined);
 
   if (!key) {
     return simulateJevDecision(request);

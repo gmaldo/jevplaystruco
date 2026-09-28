@@ -278,13 +278,16 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
       let decision: JevDecisionResponse;
       try {
         console.log(`[JevTruco] 📡 Consultando /api/jev/decision...`);
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+        if (apiKey) {
+          headers['x-jev-api-key'] = apiKey;
+          headers['Authorization'] = `Bearer ${apiKey}`;
+        }
         const response = await fetch('/api/jev/decision', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-jev-api-key': apiKey,
-            Authorization: `Bearer ${apiKey}`,
-          },
+          headers,
           body: JSON.stringify({
             state: jevState,
             context,
