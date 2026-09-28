@@ -18,6 +18,15 @@ export interface ScoreQuestion {
 }
 
 /**
+ * Standard System One wire-format question definition
+ */
+export interface SystemOneQuestion {
+  type: 'choice' | 'noul' | 'score';
+  instructions: string;
+  criteria?: Record<string, string> | string[];
+}
+
+/**
  * Single trick representation on the table
  */
 export interface TableTrick {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { getCard } from '../lib/truco/cards.ts';
 import { simulateJevDecision, buildQuestionsForContext } from '../lib/jev/simulator.ts';
-import { getJevDecision } from '../lib/jev/client.ts';
+import { getJevDecision, formatQuestionsForSystemOne } from '../lib/jev/client.ts';
 import { POST } from '../app/api/jev/decision/route.ts';
 
 describe('Jev Decision Engine - Questions Builder', () => {
@@ -22,6 +22,18 @@ describe('Jev Decision Engine - Questions Builder', () => {
       assert.ok(q.choices, `Context ${context} must provide choices`);
       assert.ok(q.nouls, `Context ${context} must provide nouls`);
       assert.ok(q.scores, `Context ${context} must provide scores`);
+
+      // Verify formatQuestionsForSystemOne produces a valid flat dictionary
+      const flat = formatQuestionsForSystemOne(q);
+      for (const item of Object.values(flat)) {
+        assert.ok(['choice', 'noul', 'score'].includes(item.type));
+        assert.ok(typeof item.instructions === 'string' && item.instructions.length > 0);
+        if (item.type === 'choice') {
+          assert.ok(typeof item.criteria === 'object' && item.criteria !== null);
+        } else if (item.type === 'score') {
+          assert.ok(Array.isArray(item.criteria));
+        }
+      }
     }
   });
 });
