@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useSyncExternalStore } from 'react';
 import { useTrucoGame } from '../lib/truco/useTrucoGame.ts';
 import { GameTable } from '../components/GameTable.tsx';
 import { ScoreBoard } from '../components/ScoreBoard.tsx';
@@ -9,7 +9,18 @@ import { SettingsModal } from '../components/SettingsModal.tsx';
 import { RulesModal } from '../components/RulesModal.tsx';
 import { sounds } from '../lib/sound/audio.ts';
 
+const emptySubscribe = () => () => {};
+
+function useIsMounted(): boolean {
+  return useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+}
+
 export default function Home() {
+  const isMounted = useIsMounted();
   const [targetScore, setTargetScore] = useState<15 | 30>(30);
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -40,6 +51,49 @@ export default function Home() {
     setTargetScore(newTarget);
     restartMatch(newTarget);
   };
+
+  if (!isMounted) {
+    return (
+      <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col selection:bg-amber-500 selection:text-stone-950">
+        <header className="sticky top-0 z-30 w-full border-b border-stone-800/80 bg-stone-950/90 backdrop-blur-md px-4 py-2.5 sm:px-6">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-700 via-amber-500 to-amber-300 shadow-md shadow-amber-950/50">
+                <span className="text-lg">🧉</span>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="font-serif font-black text-base sm:text-lg tracking-wider text-amber-200 uppercase">
+                    JevTruco
+                  </h1>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-800/60">
+                    OpenCode Zen
+                  </span>
+                </div>
+                <p className="text-[10px] text-stone-400">
+                  Truco Argentino • Inferencia System One
+                </p>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col items-center justify-center min-h-[500px]">
+          <div className="flex flex-col items-center gap-3 p-8 rounded-2xl bg-stone-900/40 border border-stone-800/60 shadow-xl">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-2xl animate-pulse">
+              🃏
+            </div>
+            <div className="font-serif font-bold text-base text-amber-200">
+              Mezclando baraja y repartiendo...
+            </div>
+            <div className="text-xs font-mono text-stone-400">
+              Conectando con motor de inferencia Jev
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col selection:bg-amber-500 selection:text-stone-950">

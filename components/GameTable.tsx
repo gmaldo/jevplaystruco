@@ -284,7 +284,7 @@ export function GameTable({
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-stone-900/85 border border-amber-600/40 shadow text-amber-100 text-xs">
             <span>🌾</span>
             <span className="font-serif font-bold">Tus tantos de Envido:</span>
-            <span className="font-mono font-black text-amber-300 text-sm">
+            <span suppressHydrationWarning className="font-mono font-black text-amber-300 text-sm">
               {envidoCalc.score}
             </span>
             {envidoCalc.cardsUsed.length > 0 && (
