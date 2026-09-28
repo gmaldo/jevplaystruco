@@ -391,6 +391,45 @@ function friendlyChoiceLabel(key: string): string {
   return QUESTION_LABELS[key] ?? key;
 }
 
+const TRUCO_BID_LABELS: Record<string, string> = {
+  none: 'Sin canto',
+  truco: 'Truco',
+  retruco: 'Retruco',
+  vale_cuatro: 'Vale Cuatro',
+};
+
+const ENVIDO_BID_LABELS: Record<string, string> = {
+  none: 'sin canto',
+  envido: 'Envido',
+  real_envido: 'Real Envido',
+  falta_envido: 'Falta Envido',
+  envido_envido: 'Envido Envido',
+};
+
+const BID_STATUS_LABELS: Record<string, string> = {
+  none: '',
+  pending: 'esperando respuesta',
+  active: 'en disputa',
+  accepted: 'aceptado',
+  declined: 'rechazado',
+  resolved: 'resuelto',
+  closed: 'cerrado',
+};
+
+/** Nombre legible de un naipe (Ancho de espada/basto para los unos bravos). */
+function formatCardLabel(card: { value: number | string; suit: string; name?: string }): string {
+  if (String(card.value) === '1' && card.suit === 'espada') return 'Ancho de espada ⚔️';
+  if (String(card.value) === '1' && card.suit === 'basto') return 'Ancho de basto 🌿';
+  return card.name ?? `${card.value} de ${card.suit}`;
+}
+
+function whoLabel(who: 'player' | 'jev' | 'tie' | undefined): string {
+  if (who === 'jev') return 'Jev';
+  if (who === 'player') return 'Vos';
+  if (who === 'tie') return 'Parda';
+  return '—';
+}
+
 export function JevInspector({
   decision,
   state,
@@ -826,36 +865,36 @@ export function JevInspector({
           {activeTab === 'schema' && (
             <div className="space-y-3">
               <p className="text-stone-400 text-xs">
-                Preguntas formuladas a Jev con esquemas estructurados:
+                Antes de jugar, Jev se hace estas preguntas sobre la mano:
               </p>
 
               {decision?.questions ? (
                 <div className="space-y-3">
-                  {/* Choices Schema */}
+                  {/* Decisiones que debe tomar */}
                   {decision.questions.choices &&
                     Object.entries(decision.questions.choices).map(([key, q]) => (
                       <div
                         key={key}
                         className="rounded-xl bg-stone-900 border border-stone-800 p-3 space-y-1.5"
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-mono text-amber-400 uppercase font-bold">
-                            ChoiceQuestion: {key}
-                          </span>
-                        </div>
+                        <span className="text-[10px] font-mono text-amber-400 uppercase font-bold">
+                          {QUESTION_LABELS[key] ?? key}
+                        </span>
                         <p className="text-xs text-stone-200">{q.instructions}</p>
                         {q.criteria && (
                           <div className="mt-2 pl-2 border-l border-stone-700 space-y-1">
                             <span className="text-[9px] uppercase font-mono text-stone-500 block">
-                              Opciones / Criterios:
+                              Sus opciones:
                             </span>
                             {Object.entries(q.criteria).map(([opt, desc]) => (
                               <div
                                 key={opt}
-                                className="text-[11px] font-mono text-stone-300 flex justify-between gap-2"
+                                className="text-[11px] text-stone-300 flex justify-between gap-2"
                               >
-                                <span className="text-amber-300 font-bold">{opt}</span>
-                                <span className="text-stone-400 truncate">{desc || '—'}</span>
+                                <span className="text-amber-300 font-bold shrink-0">
+                                  {formatChoiceName(key, opt).text}
+                                </span>
+                                <span className="text-stone-400 text-right">{desc || '—'}</span>
                               </div>
                             ))}
                           </div>
@@ -863,7 +902,7 @@ export function JevInspector({
                       </div>
                     ))}
 
-                  {/* Nouls Schema */}
+                  {/* Lecturas de la situación */}
                   {decision.questions.nouls &&
                     Object.entries(decision.questions.nouls).map(([key, q]) => (
                       <div
@@ -871,13 +910,13 @@ export function JevInspector({
                         className="rounded-xl bg-stone-900 border border-stone-800 p-3 space-y-1"
                       >
                         <span className="text-[10px] font-mono text-rose-400 uppercase font-bold">
-                          NoulQuestion: {key}
+                          {NOUL_LABELS[key] ?? key}
                         </span>
                         <p className="text-xs text-stone-200">{q.instructions}</p>
                       </div>
                     ))}
 
-                  {/* Scores Schema */}
+                  {/* Valoraciones en escala */}
                   {decision.questions.scores &&
                     Object.entries(decision.questions.scores).map(([key, q]) => (
                       <div
@@ -885,7 +924,7 @@ export function JevInspector({
                         className="rounded-xl bg-stone-900 border border-stone-800 p-3 space-y-1"
                       >
                         <span className="text-[10px] font-mono text-blue-400 uppercase font-bold">
-                          ScoreQuestion: {key}
+                          {SCORE_LABELS[key] ?? key}
                         </span>
                         <p className="text-xs text-stone-200">{q.instructions}</p>
                         {q.scale && (
@@ -898,44 +937,116 @@ export function JevInspector({
                 </div>
               ) : (
                 <div className="text-center py-8 text-stone-500 font-mono">
-                  No hay esquema disponible aún.
+                  Todavía no se le preguntó nada a Jev.
                 </div>
               )}
             </div>
           )}
 
-          {/* TAB 3: STATE JSON */}
+          {/* TAB 3: LA MESA (estado en palabras) */}
           {activeTab === 'state' && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-mono text-stone-400 uppercase">
-                  Match State Formateado
+            <div className="space-y-3">
+              {/* Marcador y mano */}
+              <div className="rounded-xl bg-stone-900 border border-stone-800 p-3 space-y-2">
+                <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-wider block">
+                  Marcador
                 </span>
-                <button
-                  onClick={copyStateJson}
-                  className="px-2.5 py-1 rounded bg-stone-800 hover:bg-stone-700 text-cyan-300 font-mono text-[10px] transition-colors cursor-pointer"
-                >
-                  {copied ? '✓ Copiado' : '📋 Copiar JSON'}
-                </button>
+                <p className="text-sm font-serif font-bold text-stone-100">
+                  Vos {state.scores.player} — Jev {state.scores.jev}
+                  <span className="text-stone-400 font-normal text-xs"> (a {state.scores.target})</span>
+                </p>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-stone-300">
+                  <span>Mano: <strong className="text-amber-300">{whoLabel(state.mano)}</strong></span>
+                  <span>Baza actual: <strong className="text-amber-300">{state.round}ª</strong></span>
+                </div>
               </div>
-              <pre className="p-3 rounded-xl bg-black border border-stone-800 text-[11px] font-mono text-emerald-400 overflow-x-auto max-h-[480px]">
-                {JSON.stringify(
-                  {
-                    round: state.round,
-                    mano: state.mano,
-                    turn: state.turn,
-                    scores: state.scores,
-                    trucoState: state.trucoState,
-                    envidoState: state.envidoState,
-                    table: state.table,
-                    jevHandRemaining: state.jevHand.length,
-                    playedJevCards: state.playedJevCards.map((c) => c.name),
-                    playedPlayerCards: state.playedPlayerCards.map((c) => c.name),
-                  },
-                  null,
-                  2
-                )}
-              </pre>
+
+              {/* Cantos en juego */}
+              <div className="rounded-xl bg-stone-900 border border-stone-800 p-3 space-y-2">
+                <span className="text-[10px] font-mono text-amber-400 uppercase tracking-wider block">
+                  Cantos
+                </span>
+                <p className="text-xs text-stone-200">
+                  <strong className="text-amber-300">
+                    {TRUCO_BID_LABELS[state.trucoState.currentBid] ?? state.trucoState.currentBid}
+                  </strong>
+                  {state.trucoState.status !== 'none' && (
+                    <span className="text-stone-400">
+                      {' '}— {BID_STATUS_LABELS[state.trucoState.status] ?? state.trucoState.status}
+                      {state.trucoState.bidBy && ` (cantó ${whoLabel(state.trucoState.bidBy)})`} · vale {state.trucoState.pointsAtStake} pts
+                    </span>
+                  )}
+                </p>
+                <p className="text-xs text-stone-200">
+                  <strong className="text-amber-300">
+                    {ENVIDO_BID_LABELS[state.envidoState.currentBid] ?? state.envidoState.currentBid}
+                  </strong>
+                  {state.envidoState.status !== 'closed' && (
+                    <span className="text-stone-400">
+                      {' '}— {BID_STATUS_LABELS[state.envidoState.status] ?? state.envidoState.status}
+                      {state.envidoState.bidBy && ` (cantó ${whoLabel(state.envidoState.bidBy)})`}
+                    </span>
+                  )}
+                  {state.envidoState.winner && (
+                    <span className="text-stone-400"> · ganó {whoLabel(state.envidoState.winner)}</span>
+                  )}
+                </p>
+              </div>
+
+              {/* Bazas jugadas */}
+              {state.table.length > 0 && (
+                <div className="rounded-xl bg-stone-900 border border-stone-800 p-3 space-y-2">
+                  <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-wider block">
+                    Bazas
+                  </span>
+                  {state.table.map((trick, i) => (
+                    <div key={i} className="flex items-center justify-between text-xs text-stone-200">
+                      <span className="text-stone-400 font-mono w-8 shrink-0">{i + 1}ª</span>
+                      <span className="flex-1 min-w-0 truncate">
+                        {trick.playerCard ? `Vos ${formatCardLabel(trick.playerCard)}` : 'Vos —'}
+                        {' vs '}
+                        {trick.jevCard ? `Jev ${formatCardLabel(trick.jevCard)}` : 'Jev —'}
+                      </span>
+                      <span className="shrink-0 ml-2 font-bold text-emerald-300">
+                        {trick.winner ? `→ ${whoLabel(trick.winner)}` : 'en juego'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Datos técnicos colapsables */}
+              <details className="rounded-xl bg-stone-900 border border-stone-800">
+                <summary className="p-3 text-[11px] font-mono text-stone-400 cursor-pointer select-none">
+                  🔧 Datos técnicos (JSON)
+                </summary>
+                <div className="px-3 pb-3 space-y-2">
+                  <button
+                    onClick={copyStateJson}
+                    className="px-2.5 py-1 rounded bg-stone-800 hover:bg-stone-700 text-cyan-300 font-mono text-[10px] transition-colors cursor-pointer"
+                  >
+                    {copied ? '✓ Copiado' : '📋 Copiar JSON'}
+                  </button>
+                  <pre className="p-3 rounded-lg bg-black border border-stone-800 text-[11px] font-mono text-emerald-400 overflow-x-auto max-h-[320px]">
+                    {JSON.stringify(
+                      {
+                        round: state.round,
+                        mano: state.mano,
+                        turn: state.turn,
+                        scores: state.scores,
+                        trucoState: state.trucoState,
+                        envidoState: state.envidoState,
+                        table: state.table,
+                        jevHandRemaining: state.jevHand.length,
+                        playedJevCards: state.playedJevCards.map((c) => c.name),
+                        playedPlayerCards: state.playedPlayerCards.map((c) => c.name),
+                      },
+                      null,
+                      2
+                    )}
+                  </pre>
+                </div>
+              </details>
             </div>
           )}
 
@@ -943,7 +1054,7 @@ export function JevInspector({
           {activeTab === 'history' && (
             <div className="space-y-2">
               <span className="text-[10px] font-mono text-stone-400 uppercase block mb-1">
-                Registro de Inferencia ({historicalEntries.length} llamadas)
+                Jugadas registradas ({historicalEntries.length})
               </span>
 
               {historicalEntries.length > 0 ? (

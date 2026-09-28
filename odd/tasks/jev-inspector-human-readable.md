@@ -13,8 +13,13 @@ Hoy el inspector expone internals del motor: nombres de primitivas, ids de pregu
 - Engram mirror: PENDIENTE (mem_* no disponible).
 
 ## Task Checklist
-- [ ] Task 1: Pestaña Decisión + badges + tabs: etiquetas humanas para choices/nouls/scores, dedupe de alias, fix del score /10, modo "En vivo/Local/Regla". (Route: direct inline)
-- [ ] Task 2: Pestañas "Qué evaluó Jev" (preguntas en lenguaje natural con opciones legibles) y "La Mesa" (resumen del estado en palabras + JSON colapsable). (Route: direct inline)
+- [x] Task 1: Pestaña Decisión + badges + tabs: etiquetas humanas para choices/nouls/scores, dedupe de alias, fix del score /10, modo "En vivo/Local/Regla". (Route: direct inline — commit `75d0215`)
+- [x] Task 2: Pestañas "Qué evaluó Jev" (preguntas en lenguaje natural con opciones legibles) y "La Mesa" (resumen del estado en palabras + JSON colapsable). (Route: direct inline — commit pending)
 
 ## Verification Evidence & Next Step
-(pending)
+- `npm run lint` → clean (un warning menor corregido en Task 1).
+- `npm test` → 92 tests / 24 suites / 0 fail.
+- `npm run build --webpack` → OK.
+- Error de tipeo detectado en build (EnvidoState.status no incluye 'none') — corregido antes del cierre.
+- Commits: `75d0215` feat(ui) decisión/badges; Task 2 commit siguiente.
+- Next step: feature cerrada; sin push ni PR solicitados.
