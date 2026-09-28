@@ -4,7 +4,12 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { getCard } from '../lib/truco/cards.ts';
 import { simulateJevDecision, buildQuestionsForContext } from '../lib/jev/simulator.ts';
-import { computeJevContext, sampleChoiceFromProbabilities } from '../lib/jev/analysis.ts';
+import {
+  computeJevContext,
+  sampleChoiceFromProbabilities,
+  injectEasyMistakes,
+  applyMixedStrategy,
+} from '../lib/jev/analysis.ts';
 import { getJevDecision, formatQuestionsForSystemOne } from '../lib/jev/client.ts';
 import { POST } from '../app/api/jev/decision/route.ts';
 
@@ -473,12 +478,13 @@ describe('Jev Decision Engine - Probabilities & Composition', () => {
     const port = server.address().port;
 
     try {
-      // Strong hand + won trick 1 → local heuristic accepts/raises.
+      // Strong hand (ranks 10-11, no Ancho) + won trick 1 → local heuristic
+      // accepts/raises, without hitting the deterministic short-circuit.
       const state = {
-        hand: [getCard(1, 'espada'), getCard(7, 'espada')],
+        hand: [getCard(3, 'basto'), getCard(7, 'oro')],
         round: 2,
         tableTricks: [
-          { trickNumber: 1, playerCard: getCard(2, 'oro'), jevCard: getCard(3, 'copa'), winner: 'jev' },
+          { trickNumber: 1, playerCard: getCard(2, 'oro'), jevCard: getCard(10, 'copa'), winner: 'jev' },
         ],
         currentBid: { type: 'truco', offeredBy: 'player' },
         score: { player: 0, jev: 0, target: 30 },
@@ -570,6 +576,101 @@ describe('Jev Decision Engine - Unified Opening Call (single request)', () => {
       if (choice === 'envido' || choice === 'real_envido') envidoCalls++;
     }
     assert.ok(envidoCalls >= 18, `Expected envido/real_envido openings with 33 tantos, got ${envidoCalls}/20`);
+  });
+});
+
+describe('Jev Decision Engine - Difficulty & Deterministic Decisions', () => {
+  it('short-circuits deterministically when only one card remains', async () => {
+    const state = {
+      hand: [getCard(4, 'copa')],
+      round: 3,
+      tableTricks: [
+        { trickNumber: 1, playerCard: getCard(2, 'oro'), jevCard: getCard(3, 'copa'), winner: 'jev' },
+        { trickNumber: 2, playerCard: getCard(5, 'basto'), jevCard: getCard(6, 'oro'), winner: 'player' },
+      ],
+      currentBid: null,
+      score: { player: 0, jev: 0, target: 30 },
+      mano: 'jev',
+    };
+
+    const decision = await getJevDecision({ state, context: 'play_card' });
+    assert.equal(decision.mode, 'deterministic');
+    assert.equal(decision.choices.card.choice, '4_copa');
+  });
+
+  it('answers retruco deterministically when the hand is already locked', async () => {
+    // Won trick 1 + Ancho de Espada in hand → cannot lose the hand.
+    const state = {
+      hand: [getCard(1, 'espada'), getCard(4, 'oro')],
+      round: 2,
+      tableTricks: [
+        { trickNumber: 1, playerCard: getCard(2, 'oro'), jevCard: getCard(3, 'copa'), winner: 'jev' },
+      ],
+      currentBid: { type: 'truco', offeredBy: 'player' },
+      score: { player: 0, jev: 0, target: 30 },
+      mano: 'player',
+    };
+
+    const decision = await getJevDecision({ state, context: 'respond_truco' });
+    assert.equal(decision.mode, 'deterministic');
+    assert.equal(decision.choices.action.choice, 'retruco');
+    assert.equal(decision.choices.truco_response.choice, 'retruco');
+  });
+
+  it('easy difficulty injects mistakes under the roll threshold', () => {
+    // envido 28 → deterministic quiero from the heuristic
+    const state = {
+      hand: [getCard(7, 'oro'), getCard(1, 'oro'), getCard(4, 'basto')],
+      allCardsJev: [getCard(7, 'oro'), getCard(1, 'oro'), getCard(4, 'basto')],
+      round: 1,
+      tableTricks: [],
+      currentBid: { type: 'envido', offeredBy: 'player' },
+      score: { player: 5, jev: 5, target: 30 },
+      mano: 'player',
+    };
+
+    const base = simulateJevDecision({ state, context: 'respond_envido' });
+    assert.equal(base.choices.action.choice, 'quiero');
+
+    const withMistake = injectEasyMistakes(base, 'respond_envido', state, () => 0.1);
+    assert.equal(withMistake.choices.action.choice, 'no_quiero');
+    assert.equal(withMistake.choices.envido_response.choice, 'no_quiero');
+
+    const clean = injectEasyMistakes(base, 'respond_envido', state, () => 0.9);
+    assert.equal(clean.choices.action.choice, 'quiero');
+  });
+
+  it('hard difficulty samples the betting distribution instead of argmax', () => {
+    const response = {
+      mode: 'local_simulator',
+      latencyMs: 10,
+      choices: {
+        action: { choice: 'card1', confidence: 0.9 },
+        card: { choice: 'card1', confidence: 0.9 },
+        call: {
+          choice: 'none',
+          confidence: 0.8,
+          probabilities: { none: 0.8, truco: 0.2 },
+        },
+        call_truco: {
+          choice: 'none',
+          confidence: 0.8,
+          probabilities: { none: 0.8, truco: 0.2 },
+        },
+      },
+      nouls: {},
+      scores: {},
+      decisionSummary: 'test',
+    };
+
+    const sampled = applyMixedStrategy(response, 'play_card', () => 0.95);
+    assert.equal(sampled.choices.call.choice, 'truco', 'tail of the distribution must be reachable');
+    assert.equal(sampled.choices.call_truco.choice, 'truco');
+    // Card play must NOT be sampled: stays optimal.
+    assert.equal(sampled.choices.card.choice, 'card1');
+
+    const argmax = applyMixedStrategy(response, 'play_card', () => 0.5);
+    assert.equal(argmax.choices.call.choice, 'none');
   });
 });
 

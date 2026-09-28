@@ -2,10 +2,18 @@ import type {
   JevDecisionRequest,
   JevDecisionResponse,
   JevDecisionQuestions,
+  JevChoiceResult,
+  JevDifficulty,
+  JevState,
   SystemOneQuestion,
 } from './types.ts';
 import { simulateJevDecision, buildQuestionsForContext } from './simulator.ts';
-import { computeJevContext } from './analysis.ts';
+import {
+  computeJevContext,
+  getForcedDecision,
+  applyMixedStrategy,
+  injectEasyMistakes,
+} from './analysis.ts';
 
 const DEFAULT_ENDPOINT = 'https://opencode.ai/zen/v1/systemone';
 const DEFAULT_MODEL = 'jev-1.13-free';
@@ -13,6 +21,7 @@ const DEFAULT_MODEL = 'jev-1.13-free';
 export interface JevDecisionOptions {
   endpoint?: string;
   model?: string;
+  difficulty?: JevDifficulty;
 }
 
 /**
@@ -170,6 +179,65 @@ function applyCompositionAndRouting(
  * - If apiKey or process.env (JEV_API_KEY || TYPESAFE_API_KEY) is available, calls OpenCode Zen / TypeSafe AI API with 5-second timeout.
  * - If fetch fails, times out, or no API key, falls back gracefully to simulateJevDecision.
  */
+/**
+ * Builds a full response for a rule-forced decision (no model call).
+ */
+function buildDeterministicResponse(
+  context: JevDecisionRequest['context'],
+  state: JevState,
+  forced: { choice: string; summary: string },
+  startTime: number
+): JevDecisionResponse {
+  const result: JevChoiceResult = { choice: forced.choice, confidence: 0.99 };
+  const noCall: JevChoiceResult = { choice: 'none', confidence: 0.9 };
+
+  let choices: Record<string, JevChoiceResult>;
+  if (context === 'play_card') {
+    choices = {
+      card: result,
+      play_card: result,
+      action: result,
+      call: noCall,
+      call_truco: noCall,
+      ...(state.availableCalls?.length ? { opening_call: noCall } : {}),
+    };
+  } else if (context === 'respond_truco') {
+    choices = { action: result, truco_response: result };
+  } else if (context === 'respond_envido') {
+    choices = { action: result, envido_response: result };
+  } else {
+    choices = { action: result, call: result };
+  }
+
+  return {
+    mode: 'deterministic',
+    latencyMs: Math.max(1, Date.now() - startTime),
+    choices,
+    nouls: {},
+    scores: {},
+    decisionSummary: forced.summary,
+    questions: buildQuestionsForContext(context, state),
+    context,
+  };
+}
+
+/**
+ * Applies the selected difficulty to a resolved decision:
+ * - easy: injects calibrated tactical mistakes;
+ * - hard: samples betting decisions from their probability distribution
+ *   (mixed strategy — unpredictable calls, optimal card play).
+ */
+function finalizeByDifficulty(
+  response: JevDecisionResponse,
+  difficulty: JevDifficulty,
+  context: JevDecisionRequest['context'],
+  state: JevState
+): JevDecisionResponse {
+  if (difficulty === 'easy') return injectEasyMistakes(response, context, state);
+  if (difficulty === 'hard') return applyMixedStrategy(response, context);
+  return response;
+}
+
 export async function getJevDecision(
   request: JevDecisionRequest,
   apiKey?: string,
@@ -178,10 +246,12 @@ export async function getJevDecision(
 ): Promise<JevDecisionResponse> {
   let customEndpoint: string | undefined;
   let customModel: string | undefined;
+  let customDifficulty: JevDifficulty | undefined;
 
   if (typeof optionsOrEndpoint === 'object' && optionsOrEndpoint !== null) {
     customEndpoint = optionsOrEndpoint.endpoint;
     customModel = optionsOrEndpoint.model;
+    customDifficulty = optionsOrEndpoint.difficulty;
   } else if (typeof optionsOrEndpoint === 'string') {
     customEndpoint = optionsOrEndpoint;
     customModel = modelOverride;
@@ -203,19 +273,34 @@ export async function getJevDecision(
       ? process.env.JEV_API_KEY || process.env.TYPESAFE_API_KEY
       : undefined);
 
-  if (!key) {
-    return simulateJevDecision(request);
+  const startTime = Date.now();
+  const difficulty: JevDifficulty =
+    customDifficulty || request.difficulty || 'normal';
+  const enrichedState: JevState = {
+    ...request.state,
+    computed: request.state.computed ?? computeJevContext(request.state),
+  };
+  const enrichedRequest: JevDecisionRequest = { ...request, state: enrichedState };
+
+  // Deterministic short-circuit: some decisions need no judgment at all.
+  const forced = getForcedDecision(enrichedState, request.context);
+  if (forced) {
+    return buildDeterministicResponse(request.context, enrichedState, forced, startTime);
   }
 
-  const startTime = Date.now();
+  if (!key) {
+    return finalizeByDifficulty(
+      simulateJevDecision(enrichedRequest),
+      difficulty,
+      request.context,
+      enrichedState
+    );
+  }
+
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    const enrichedState = {
-      ...request.state,
-      computed: request.state.computed ?? computeJevContext(request.state),
-    };
     const questions = buildQuestionsForContext(request.context, enrichedState);
     const flatQuestions = formatQuestionsForSystemOne(questions);
 
@@ -419,29 +504,39 @@ function generateLiveDecisionSummary(
       decisionSummary
     );
 
-    return {
-      mode: 'live_api',
-      latencyMs,
-      choices: Object.keys(composed.choices).length > 0 ? composed.choices : (data.choices || {}),
-      nouls: Object.keys(composed.nouls).length > 0 ? composed.nouls : (data.nouls || {}),
-      scores: Object.keys(composed.scores).length > 0 ? composed.scores : (data.scores || {}),
-      decisionSummary: composed.summary,
-      questions,
-      model: data.model || model,
-      context: request.context,
-    };
+    return finalizeByDifficulty(
+      {
+        mode: 'live_api',
+        latencyMs,
+        choices: Object.keys(composed.choices).length > 0 ? composed.choices : (data.choices || {}),
+        nouls: Object.keys(composed.nouls).length > 0 ? composed.nouls : (data.nouls || {}),
+        scores: Object.keys(composed.scores).length > 0 ? composed.scores : (data.scores || {}),
+        decisionSummary: composed.summary,
+        questions,
+        model: data.model || model,
+        context: request.context,
+      },
+      difficulty,
+      request.context,
+      enrichedState
+    );
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     console.warn(
       `[Jev Client] ⚠️ No se pudo obtener respuesta live de ${endpoint} (${errorMsg}). Activando simulador local calibrado.`
     );
     // Graceful fallback to calibrated local simulator
-    const fallback = simulateJevDecision(request);
-    return {
-      ...fallback,
-      mode: 'local_simulator',
-      model,
-      context: request.context,
-    };
+    const fallback = simulateJevDecision(enrichedRequest);
+    return finalizeByDifficulty(
+      {
+        ...fallback,
+        mode: 'local_simulator',
+        model,
+        context: request.context,
+      },
+      difficulty,
+      request.context,
+      enrichedState
+    );
   }
 }

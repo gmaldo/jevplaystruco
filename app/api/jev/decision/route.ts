@@ -56,6 +56,14 @@ export async function POST(req: Request) {
       (typeof requestObj.model === 'string' && requestObj.model ? requestObj.model : undefined) ||
       undefined;
 
+    const validDifficulties = ['easy', 'normal', 'hard'];
+    const rawDifficulty =
+      req.headers.get('x-jev-difficulty') ||
+      (typeof requestObj.difficulty === 'string' ? requestObj.difficulty : undefined);
+    const difficulty = validDifficulties.includes(rawDifficulty || '')
+      ? (rawDifficulty as 'easy' | 'normal' | 'hard')
+      : undefined;
+
     const stateObj = requestObj.state as Record<string, unknown> | undefined;
     console.log(
       `[Server /api/jev/decision] 📨 Petición recibida: context="${requestObj.context}", round=${stateObj?.round}, mano=${stateObj?.mano}`
@@ -64,7 +72,7 @@ export async function POST(req: Request) {
     const decision = await getJevDecision(
       requestObj as unknown as JevDecisionRequest,
       apiKey,
-      { endpoint, model }
+      { endpoint, model, difficulty }
     );
 
     console.log(

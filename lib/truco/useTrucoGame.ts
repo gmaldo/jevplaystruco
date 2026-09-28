@@ -5,6 +5,8 @@ import type { Card, EnvidoCall, TrucoCall } from './types.ts';
 import type {
   JevDecisionRequest,
   JevDecisionResponse,
+  JevDifficulty,
+  JevPlayerProfile,
   JevState,
   TableTrick as JevTableTrick,
 } from '../jev/types.ts';
@@ -46,6 +48,8 @@ export interface UseTrucoGameReturn {
   restartMatch: (target?: 15 | 30) => void;
   setApiKey: (key: string) => void;
   apiKey: string;
+  difficulty: JevDifficulty;
+  setDifficulty: (level: JevDifficulty) => void;
   decisionHistory: JevDecisionResponse[];
   availableEnvidoBids: EnvidoBid[];
   availableTrucoBid: TrucoBid | null;
@@ -68,8 +72,35 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
     return '';
   });
   const [decisionHistory, setDecisionHistory] = useState<JevDecisionResponse[]>([]);
+  const [difficulty, setDifficultyState] = useState<JevDifficulty>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('JEV_DIFFICULTY');
+      if (stored === 'easy' || stored === 'normal' || stored === 'hard') return stored;
+    }
+    return 'hard';
+  });
   const lastExecutedActionKeyRef = useRef<string>('');
   const activeRequestIdRef = useRef<number>(0);
+
+  // Opponent modeling: player tendencies accumulated across the match.
+  const playerStatsRef = useRef<JevPlayerProfile>({
+    handsPlayed: 0,
+    trucoCalls: 0,
+    trucoResponses: 0,
+    trucoFolds: 0,
+    envidoCalls: 0,
+    envidoResponses: 0,
+    envidoFolds: 0,
+    envidoDeclarations: [],
+  });
+  const handEndCountedRef = useRef(false);
+
+  const setDifficulty = useCallback((level: JevDifficulty) => {
+    setDifficultyState(level);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('JEV_DIFFICULTY', level);
+    }
+  }, []);
 
   const handleSetApiKey = useCallback((key: string) => {
     setApiKey(key);
@@ -90,22 +121,28 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
   }, []);
 
   const callEnvidoAction = useCallback((bid: EnvidoBid) => {
+    if (bid !== 'none') playerStatsRef.current.envidoCalls++;
     setState((current) => machineCallEnvido(current, 'player', bid));
   }, []);
 
   const respondEnvidoAction = useCallback(
     (response: 'quiero' | 'no_quiero' | 'real_envido' | 'falta_envido') => {
+      playerStatsRef.current.envidoResponses++;
+      if (response === 'no_quiero') playerStatsRef.current.envidoFolds++;
       setState((current) => machineRespondEnvido(current, response));
     },
     []
   );
 
   const callTrucoAction = useCallback(() => {
+    playerStatsRef.current.trucoCalls++;
     setState((current) => machineCallTruco(current, 'player'));
   }, []);
 
   const respondTrucoAction = useCallback(
     (response: 'quiero' | 'no_quiero' | 'retruco' | 'vale_cuatro') => {
+      playerStatsRef.current.trucoResponses++;
+      if (response === 'no_quiero') playerStatsRef.current.trucoFolds++;
       setState((current) => machineRespondTruco(current, response));
     },
     []
@@ -124,10 +161,37 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
     (target?: 15 | 30) => {
       lastExecutedActionKeyRef.current = '';
       setDecisionHistory([]);
+      playerStatsRef.current = {
+        handsPlayed: 0,
+        trucoCalls: 0,
+        trucoResponses: 0,
+        trucoFolds: 0,
+        envidoCalls: 0,
+        envidoResponses: 0,
+        envidoFolds: 0,
+        envidoDeclarations: [],
+      };
+      handEndCountedRef.current = false;
       setState(startNewMatch(target || initialTarget));
     },
     [initialTarget]
   );
+
+  // Capture hand outcomes (hands played, envido declarations) once per hand.
+  useEffect(() => {
+    if (state.phase === 'hand_ended') {
+      if (!handEndCountedRef.current) {
+        handEndCountedRef.current = true;
+        playerStatsRef.current.handsPlayed++;
+        const declared = state.envidoState.declaredPoints?.player;
+        if (typeof declared === 'number') {
+          playerStatsRef.current.envidoDeclarations.push(declared);
+        }
+      }
+    } else {
+      handEndCountedRef.current = false;
+    }
+  }, [state.phase, state.envidoState.declaredPoints]);
 
   // Automatic Jev execution turn observer
   useEffect(() => {
@@ -241,6 +305,11 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
         trucoOfferedBy: state.trucoState.bidBy || null,
       };
 
+      // Opponent profile is only fed to the model on hard difficulty.
+      if (difficulty === 'hard') {
+        jevState.playerProfile = { ...playerStatsRef.current };
+      }
+
       // Legal opening calls are part of the state, so the card play and the
       // call decision are answered in a single System One request.
       if (context === 'play_card') {
@@ -268,6 +337,7 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
             headers['x-jev-api-key'] = apiKey;
             headers['Authorization'] = `Bearer ${apiKey}`;
           }
+          headers['x-jev-difficulty'] = difficulty;
           const response = await fetch('/api/jev/decision', {
             method: 'POST',
             headers,
@@ -275,6 +345,7 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
               state: st,
               context: ctx,
               apiKey: apiKey || undefined,
+              difficulty,
             }),
           });
 
@@ -293,7 +364,10 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
             `[JevTruco] ⚠️ Error en /api/jev/decision, usando fallback client:`,
             err instanceof Error ? err.message : err
           );
-          const fallbackDec = await getJevDecision({ state: st, context: ctx }, apiKey);
+          const fallbackDec = await getJevDecision(
+            { state: st, context: ctx, difficulty },
+            apiKey
+          );
           fallbackDec.context = ctx;
           return fallbackDec;
         }
@@ -394,7 +468,7 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
     };
 
     executeJevDecision();
-  }, [state, apiKey]);
+  }, [state, apiKey, difficulty]);
 
   return {
     state,
@@ -408,6 +482,8 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
     restartMatch: restartMatchAction,
     setApiKey: handleSetApiKey,
     apiKey,
+    difficulty,
+    setDifficulty,
     decisionHistory,
     availableEnvidoBids: getAvailableEnvidoBids(state, 'player'),
     availableTrucoBid: getAvailableTrucoBid(state, 'player'),

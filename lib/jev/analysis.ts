@@ -1,7 +1,13 @@
 import type { Card } from '../truco/types.ts';
 import { calculateEnvido } from '../truco/cards.ts';
 import { calculateFaltaEnvidoPoints } from '../truco/rules.ts';
-import type { JevChoiceResult, JevComputedState, JevState } from './types.ts';
+import type {
+  JevChoiceResult,
+  JevComputedState,
+  JevContext,
+  JevDecisionResponse,
+  JevState,
+} from './types.ts';
 
 /**
  * Extracts Jev's 3-card hand for envido calculation.
@@ -161,6 +167,144 @@ export function sampleChoiceFromProbabilities(
     if (roll <= 0) return option;
   }
   return result.choice;
+}
+
+/**
+ * Deterministic decisions that need no model judgment at all:
+ * - a single remaining card must be played;
+ * - a truco hand already mathematically won (first trick won + Ancho de
+ *   Espada still in hand, which beats everything) answers quiero/raise.
+ */
+export function getForcedDecision(
+  state: JevState,
+  context: JevContext
+): { choice: string; summary: string } | null {
+  const computed = state.computed ?? computeJevContext(state);
+
+  if (context === 'play_card' && state.hand.length === 1) {
+    return {
+      choice: state.hand[0].id,
+      summary: `Única carta restante: Jev juega ${state.hand[0].name} (regla determinista).`,
+    };
+  }
+
+  if (
+    context === 'respond_truco' &&
+    computed.trickRecord.jev >= 1 &&
+    computed.maxRank === 14 &&
+    state.round >= 2
+  ) {
+    const bid = state.currentBid?.type;
+    const raise =
+      bid === 'truco' ? 'retruco' : bid === 'retruco' ? 'vale_cuatro' : 'quiero';
+    return {
+      choice: raise,
+      summary: `Mano ya ganada (primera baza + Ancho de Espada en mano): Jev responde ${raise} sin consultar.`,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Hard difficulty: sample the *betting* decision from its calibrated
+ * distribution instead of always taking the argmax. Card play stays
+ * optimal — mixing cards just makes Jev worse; mixing calls makes it
+ * unreadable.
+ */
+export function applyMixedStrategy(
+  response: JevDecisionResponse,
+  context: JevContext,
+  rng: () => number = Math.random
+): JevDecisionResponse {
+  const targetKey = response.choices.opening_call
+    ? 'opening_call'
+    : context === 'play_card'
+    ? 'call'
+    : 'action';
+  const target = response.choices[targetKey];
+  if (!target?.probabilities) return response;
+
+  const sampled = sampleChoiceFromProbabilities(target, rng);
+  if (sampled === target.choice) return response;
+
+  const sampledResult: JevChoiceResult = {
+    ...target,
+    choice: sampled,
+    confidence: target.probabilities[sampled] ?? target.confidence,
+  };
+  const aliasKeys =
+    targetKey === 'call'
+      ? ['call_truco']
+      : context === 'respond_envido'
+      ? ['envido_response']
+      : context === 'respond_truco'
+      ? ['truco_response']
+      : context === 'initiate_call'
+      ? ['call']
+      : [];
+
+  const choices = { ...response.choices, [targetKey]: sampledResult };
+  for (const key of aliasKeys) {
+    if (choices[key]) choices[key] = { ...sampledResult };
+  }
+
+  return {
+    ...response,
+    choices,
+    decisionSummary: `${response.decisionSummary} • estrategia mixta (${sampled})`,
+  };
+}
+
+/**
+ * Easy difficulty: inject calibrated tactical mistakes (~35% of the time)
+ * — a wrong card discard, a flipped quiero/no_quiero, or a missed call.
+ */
+export function injectEasyMistakes(
+  response: JevDecisionResponse,
+  context: JevContext,
+  state: JevState,
+  rng: () => number = Math.random
+): JevDecisionResponse {
+  if (rng() >= 0.35) return response;
+  const action = response.choices.action;
+  if (!action) return response;
+  const note = ' • error táctico (nivel fácil)';
+
+  if (context === 'play_card') {
+    const others = state.hand.filter((c) => c.id !== action.choice);
+    if (others.length === 0) return response;
+    const pick = others[Math.floor(rng() * others.length)];
+    const result: JevChoiceResult = { choice: pick.id, confidence: 0.5 };
+    return {
+      ...response,
+      choices: { ...response.choices, action: result, card: result, play_card: result },
+      decisionSummary: `${response.decisionSummary}${note}`,
+    };
+  }
+
+  if (context === 'respond_envido' || context === 'respond_truco') {
+    if (action.choice !== 'quiero' && action.choice !== 'no_quiero') return response;
+    const flipped = action.choice === 'quiero' ? 'no_quiero' : 'quiero';
+    const result: JevChoiceResult = { ...action, choice: flipped, confidence: 0.5 };
+    const alias = context === 'respond_envido' ? 'envido_response' : 'truco_response';
+    return {
+      ...response,
+      choices: { ...response.choices, action: result, [alias]: result },
+      decisionSummary: `${response.decisionSummary}${note}`,
+    };
+  }
+
+  if (context === 'initiate_call' && action.choice !== 'none') {
+    const result: JevChoiceResult = { ...action, choice: 'none', confidence: 0.5 };
+    return {
+      ...response,
+      choices: { ...response.choices, action: result, call: result },
+      decisionSummary: `${response.decisionSummary}${note}`,
+    };
+  }
+
+  return response;
 }
 
 /**

@@ -39,6 +39,8 @@ export default function Home() {
     restartMatch,
     setApiKey,
     apiKey,
+    difficulty,
+    setDifficulty,
     decisionHistory,
     availableEnvidoBids,
     availableTrucoBid,
@@ -289,6 +291,8 @@ export default function Home() {
         onChangeTargetScore={handleTargetChange}
         soundEnabled={soundEnabled}
         onToggleSound={setSoundEnabled}
+        difficulty={difficulty}
+        onChangeDifficulty={setDifficulty}
       />
 
       {/* ------------------------------------------------------------- */}

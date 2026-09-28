@@ -176,7 +176,9 @@ function formatDecisionNarrative(params: {
   const headline = primary
     ? `Respuesta de Jev: ${primary.label} - ${primary.formattedChoice} (${confPct}% confianza)`
     : summary || 'Decisión ejecutada';
-  const why = `Evaluación táctica en ronda ${round} con fuerza de mano en ${strengthPart}/100 (${mode === 'live_api' ? `Live API ${latencyMs}ms` : `Simulador ${latencyMs}ms`}).`;
+  const modeLabel =
+    mode === 'live_api' ? 'Live API' : mode === 'deterministic' ? 'Regla' : 'Simulador';
+  const why = `Evaluación táctica en ronda ${round} con fuerza de mano en ${strengthPart}/100 (${modeLabel} ${latencyMs}ms).`;
 
   return { headline, why };
 }
@@ -271,6 +273,8 @@ function generateDecisionExplanation(params: {
   const engineNote =
     mode === 'live_api'
       ? `Inferencia en vivo procesada en ${latencyMs}ms por el modelo Jev (System One).`
+      : mode === 'deterministic'
+      ? `Decisión forzada por regla determinista (sin consulta al modelo) en ${latencyMs}ms.`
       : `Decisión simulada localmente en ${latencyMs}ms.`;
   parts.push(engineNote);
 
@@ -414,7 +418,9 @@ export function JevInspector({
       let summary = item.decisionSummary || 'Decisión ejecutada';
       if ((!item.decisionSummary || item.decisionSummary.startsWith('Decisión Jev')) && choices.length > 0) {
         const primary = choices[0];
-        summary = `Jev ejecuta ${primary.label}: ${primary.formattedChoice} (${Math.round((primary.confidence || 1) * 100)}% certeza) • ${item.mode === 'live_api' ? 'Live API' : 'Simulador'}`;
+        summary = `Jev ejecuta ${primary.label}: ${primary.formattedChoice} (${Math.round((primary.confidence || 1) * 100)}% certeza) • ${
+          item.mode === 'live_api' ? 'Live API' : item.mode === 'deterministic' ? 'Regla' : 'Simulador'
+        }`;
       }
 
       const narrative = formatDecisionNarrative({

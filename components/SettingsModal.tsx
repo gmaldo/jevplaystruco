@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { sounds } from '../lib/sound/audio.ts';
+import type { JevDifficulty } from '../lib/jev/types.ts';
 
 export interface SettingsModalProps {
   isOpen: boolean;
@@ -12,7 +13,15 @@ export interface SettingsModalProps {
   onChangeTargetScore: (target: 15 | 30) => void;
   soundEnabled: boolean;
   onToggleSound: (enabled: boolean) => void;
+  difficulty?: JevDifficulty;
+  onChangeDifficulty?: (level: JevDifficulty) => void;
 }
+
+const DIFFICULTY_OPTIONS: { id: JevDifficulty; label: string; desc: string }[] = [
+  { id: 'easy', label: 'Fácil', desc: 'Comete errores' },
+  { id: 'normal', label: 'Normal', desc: 'Juego sólido' },
+  { id: 'hard', label: 'Difícil', desc: 'Se adapta y farolea' },
+];
 
 export function SettingsModal({
   isOpen,
@@ -21,6 +30,8 @@ export function SettingsModal({
   onChangeTargetScore,
   soundEnabled,
   onToggleSound,
+  difficulty = 'hard',
+  onChangeDifficulty,
 }: SettingsModalProps) {
   if (!isOpen) return null;
 
@@ -83,6 +94,35 @@ export function SettingsModal({
               </button>
             </div>
           </div>
+
+          <hr className="border-stone-800" />
+
+          {/* Rival difficulty */}
+          {onChangeDifficulty && (
+            <div className="space-y-2">
+              <label className="font-mono text-amber-300 uppercase font-bold text-[11px] flex items-center gap-1.5">
+                <span>🧠</span>
+                <span>Dificultad del Rival</span>
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {DIFFICULTY_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => onChangeDifficulty(opt.id)}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      difficulty === opt.id
+                        ? 'bg-amber-950/40 border-amber-500 text-amber-200'
+                        : 'bg-stone-900 border-stone-800 text-stone-400 hover:border-stone-700'
+                    }`}
+                  >
+                    <div className="font-serif font-bold text-xs">{opt.label}</div>
+                    <div className="text-[10px] text-stone-400 mt-0.5">{opt.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <hr className="border-stone-800" />
 
