@@ -1,5 +1,6 @@
 import type { Card } from '../truco/types.ts';
 import { calculateEnvido } from '../truco/cards.ts';
+import { getJevEnvidoCards, getPlayerCardOnTable } from './analysis.ts';
 import type {
   JevDecisionRequest,
   JevDecisionResponse,
@@ -7,22 +8,12 @@ import type {
   JevDecisionQuestions,
 } from './types.ts';
 
-/**
- * Extracts Jev's 3-card hand for envido calculation.
- * If allCardsJev is provided (original deal), uses that; otherwise uses current hand + played cards.
- */
-function getJevEnvidoCards(state: JevState): Card[] {
-  if (state.allCardsJev && state.allCardsJev.length > 0) {
-    return state.allCardsJev;
-  }
-  const cards = [...state.hand];
-  for (const trick of state.tableTricks) {
-    if (trick.jevCard && !cards.some((c) => c.id === trick.jevCard!.id)) {
-      cards.push(trick.jevCard);
-    }
-  }
-  return cards;
-}
+const HAND_STRENGTH_LEVELS = [
+  '0-25: Weak hand, low chance of winning',
+  '26-50: Average hand with defensive options',
+  '51-75: Competitive hand with good chances',
+  '76-100: Dominant or winning hand',
+];
 
 /**
  * Builds TypeSafe AI question definitions corresponding to context.
@@ -36,24 +27,28 @@ export function buildQuestionsForContext(
       return {
         choices: {
           action: {
-            instructions: 'Decidir si aceptar, rechazar o aumentar la apuesta de Envido del rival',
+            instructions:
+              'Should Jev accept (quiero), decline (no_quiero), or raise the rival\'s Envido bet? Jev holds `computed.envidoPoints` envido points, the bet is worth `computed.pointsAtStake` points, and the match score is `score`.',
             criteria: {
-              quiero: 'Aceptar el envido si se tiene un puntaje competitivo (>=27) o para igualar',
-              no_quiero: 'Rechazar el envido cuando el puntaje es bajo para minimizar pérdida',
-              real_envido: 'Subir a Real Envido si se poseen 31 o más puntos y es favorable',
-              falta_envido: 'Subir a Falta Envido si la mano es excepcional o situación límite',
+              quiero: 'Accept when `computed.envidoPoints` is competitive (27+) or the raise history makes declining too costly',
+              no_quiero: 'Decline when `computed.envidoPoints` is too low to likely win, conceding fewer points',
+              real_envido: 'Raise to Real Envido when `computed.envidoPoints` is 31 or more',
+              falta_envido: 'Raise to Falta Envido (worth `computed.faltaEnvidoValue` points) with an exceptional score or to close out the match',
             },
           },
         },
         nouls: {
           bluffing_probability: {
-            instructions: 'Probabilidad de que Jev esté realizando un farol o mentira en Envido',
+            instructions:
+              'Would accepting or raising with weak envido points work as a bluff here, given `score` and `playerProfile`?',
           },
         },
         scores: {
           hand_confidence: {
-            instructions: 'Confianza de la mano en ganar el Envido (0 a 100)',
+            instructions:
+              'How strong is Jev\'s envido (`computed.envidoPoints`) relative to a typical winning score (27+)?',
             scale: { min: 0, max: 100 },
+            levels: HAND_STRENGTH_LEVELS,
           },
         },
       };
@@ -62,24 +57,28 @@ export function buildQuestionsForContext(
       return {
         choices: {
           action: {
-            instructions: 'Responder a la apuesta de Truco, Retruco o Vale Cuatro del rival',
+            instructions:
+              'How should Jev respond to the rival\'s Truco bet (worth `computed.pointsAtStake` points)? Consider `computed.cardRanks` (rank 14 is strongest), `computed.trickRecord` and `score`.',
             criteria: {
-              quiero: 'Aceptar la apuesta con cartas medianas o altas',
-              no_quiero: 'Rechazar e irse al mazo si la mano es débil y no hay esperanza',
-              retruco: 'Aumentar a Retruco con cartas de jerarquía alta (>=10)',
-              vale_cuatro: 'Aumentar a Vale Cuatro con cartas máximas (anchos, 7s bravos)',
+              quiero: 'Accept with medium/high cards or a won first trick',
+              no_quiero: 'Fold when `hand` is weak and the hand is likely lost',
+              retruco: 'Raise to Retruco (3 points) with high-rank cards (rank 10+)',
+              vale_cuatro: 'Raise to Vale Cuatro (4 points) with top cards (anchos, 7 bravos)',
             },
           },
         },
         nouls: {
           bluffing_probability: {
-            instructions: 'Probabilidad de que Jev esté fingiendo fuerza en Truco',
+            instructions:
+              'Would accepting or raising with a weak hand work as a bluff, given `score` and `playerProfile`?',
           },
         },
         scores: {
           hand_confidence: {
-            instructions: 'Confianza estimada en ganar la mano de Truco (0 a 100)',
+            instructions:
+              'How likely is `hand` to win this Truco hand given `computed.cardRanks` and `computed.trickRecord`?',
             scale: { min: 0, max: 100 },
+            levels: HAND_STRENGTH_LEVELS,
           },
         },
       };
@@ -88,32 +87,38 @@ export function buildQuestionsForContext(
       return {
         choices: {
           card: {
-            instructions: 'Seleccionar la mejor carta de la mano para jugar en la baza actual',
+            instructions:
+              'Which card from `hand` should Jev play this trick? `computed.cardRanks` lists each card with its truco rank (14 = strongest). Use `playerCardOnTable`, `computed.canBeatPlayerCard` and `computed.trickRecord` to decide.',
             criteria: state.hand.reduce<Record<string, string | null>>((acc, card) => {
-              acc[card.id] = `Jugar ${card.name} (jerarquía ${card.rank})`;
+              acc[card.id] = `Play the ${card.name} (truco rank ${card.rank})`;
               return acc;
             }, {}),
           },
           call: {
-            instructions: 'Decidir si cantar Truco antes de tirar la carta',
+            instructions:
+              'Should Jev call Truco before playing, given `computed.maxRank`, `computed.trickRecord` and `score`?',
             criteria: {
-              truco: 'Cantar Truco al tener ventaja de cartas o control de baza',
-              none: 'No cantar y solo jugar carta',
+              truco: 'Call Truco when holding card advantage or trick control',
+              none: 'Do not call, just play the card',
             },
           },
         },
         nouls: {
           call_truco: {
-            instructions: 'Probabilidad recomendada de iniciar canto de Truco',
+            instructions:
+              'Is calling Truco now profitable given `hand` strength in `computed.cardRanks` and the `score`?',
           },
           bluffing_probability: {
-            instructions: 'Probabilidad de engaño en la carta o canto seleccionado',
+            instructions:
+              'Would representing strength here work as a bluff, given `score` and `playerProfile`?',
           },
         },
         scores: {
           hand_confidence: {
-            instructions: 'Fuerza global percibida de las cartas restantes (0 a 100)',
+            instructions:
+              'Overall strength of `hand` for the remaining tricks, based on `computed.cardRanks`.',
             scale: { min: 0, max: 100 },
+            levels: HAND_STRENGTH_LEVELS,
           },
         },
       };
@@ -122,37 +127,41 @@ export function buildQuestionsForContext(
       const criteria: Record<string, string | null> = {};
 
       if (state.round === 1 && !state.envidoPlayed) {
-        criteria.envido = 'Cantar Envido inicial (2 puntos)';
-        criteria.real_envido = 'Cantar Real Envido inicial (3 puntos)';
-        criteria.falta_envido = 'Cantar Falta Envido';
+        criteria.envido = 'Call Envido first (2 points)';
+        criteria.real_envido = 'Call Real Envido directly (3 points)';
+        criteria.falta_envido = 'Call Falta Envido';
       }
 
       if ((state.trucoLevel ?? 0) === 0) {
-        criteria.truco = 'Cantar ¡TRUCO! (2 puntos) para presionar o definir la mano';
+        criteria.truco = 'Call TRUCO (2 points) to pressure or define the hand';
       } else if (state.trucoLevel === 1 && state.trucoOfferedBy !== 'jev') {
-        criteria.retruco = 'Cantar ¡QUIERO RETRUCO! (3 puntos) para subir la apuesta';
+        criteria.retruco = 'Call QUIERO RETRUCO (3 points) to raise the stakes';
       } else if (state.trucoLevel === 2 && state.trucoOfferedBy !== 'jev') {
-        criteria.vale_cuatro = 'Cantar ¡VALE CUATRO! (4 puntos) para jugar por el máximo';
+        criteria.vale_cuatro = 'Call VALE CUATRO (4 points) to play for the maximum';
       }
 
-      criteria.none = 'Pasar sin cantar en este turno y jugar carta';
+      criteria.none = 'Pass without calling and play a card';
 
       return {
         choices: {
           action: {
-            instructions: 'Iniciar un canto de Envido o Truco en el turno',
+            instructions:
+              'Should Jev open a call this turn? `computed.envidoPoints` holds its envido score, `computed.cardRanks` its card strength, and `computed.pointsAtStake`/`score` describe what is at risk.',
             criteria,
           },
         },
         nouls: {
           bluffing_probability: {
-            instructions: 'Probabilidad de que el canto iniciado sea un farol',
+            instructions:
+              'Would the chosen call work as a bluff, given `score` and `playerProfile`?',
           },
         },
         scores: {
           hand_confidence: {
-            instructions: 'Nivel de confianza en los tantos o jerarquía para cantar (0 a 100)',
+            instructions:
+              'Confidence that `hand` (tantos or card ranks) justifies opening a call.',
             scale: { min: 0, max: 100 },
+            levels: HAND_STRENGTH_LEVELS,
           },
         },
       };
@@ -367,9 +376,7 @@ function handlePlayCard(state: JevState): Omit<JevDecisionResponse, 'mode' | 'la
   }
 
   // Identify if player has already placed a card in this trick
-  const playerCardOnTable =
-    state.playerCardOnTable ||
-    state.tableTricks.find((t) => t.trickNumber === state.round && t.playerCard && !t.jevCard)?.playerCard;
+  const playerCardOnTable = getPlayerCardOnTable(state);
 
   const handAscending = [...state.hand].sort((a, b) => a.rank - b.rank);
   const handDescending = [...state.hand].sort((a, b) => b.rank - a.rank);
@@ -479,9 +486,7 @@ function handleInitiateCall(state: JevState): Omit<JevDecisionResponse, 'mode' |
   const maxRank = handDescending[0]?.rank ?? 0;
   const strongCards = handDescending.filter((c) => c.rank >= 10);
 
-  const playerCardOnTable =
-    state.playerCardOnTable ||
-    state.tableTricks.find((t) => t.trickNumber === state.round && t.playerCard && !t.jevCard)?.playerCard;
+  const playerCardOnTable = getPlayerCardOnTable(state);
 
   const canKillPlayerCard = playerCardOnTable
     ? handDescending.some((c) => c.rank > playerCardOnTable.rank)

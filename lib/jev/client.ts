@@ -5,6 +5,7 @@ import type {
   SystemOneQuestion,
 } from './types.ts';
 import { simulateJevDecision, buildQuestionsForContext } from './simulator.ts';
+import { computeJevContext } from './analysis.ts';
 
 const DEFAULT_ENDPOINT = 'https://opencode.ai/zen/v1/systemone';
 const DEFAULT_MODEL = 'jev-1.13-free';
@@ -51,11 +52,11 @@ export function formatQuestionsForSystemOne(
       flat[id] = {
         type: 'score',
         instructions: q.instructions,
-        criteria: [
-          '0-25: Mano débil o baja probabilidad de ganar',
-          '26-50: Mano regular con opciones defensivas',
-          '51-75: Mano competitiva con buenas chances',
-          '76-100: Mano dominante o ganadora',
+        criteria: q.levels ?? [
+          '0-25: Weak hand or low chance of winning',
+          '26-50: Average hand with defensive options',
+          '51-75: Competitive hand with good chances',
+          '76-100: Dominant or winning hand',
         ],
       };
     }
@@ -111,7 +112,11 @@ export async function getJevDecision(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    const questions = buildQuestionsForContext(request.context, request.state);
+    const enrichedState = {
+      ...request.state,
+      computed: request.state.computed ?? computeJevContext(request.state),
+    };
+    const questions = buildQuestionsForContext(request.context, enrichedState);
     const flatQuestions = formatQuestionsForSystemOne(questions);
 
     console.log(`[Jev Client] 🚀 Conectando a ${endpoint} (modelo: ${model})...`);
@@ -125,7 +130,7 @@ export async function getJevDecision(
       },
       body: JSON.stringify({
         model,
-        state: request.state,
+        state: enrichedState,
         questions: flatQuestions,
       }),
       signal: controller.signal,

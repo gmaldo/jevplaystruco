@@ -1,4 +1,4 @@
-import type { Card, Player, RoundWinner, GameScore, TrucoCall, EnvidoCall, CallResponse } from '../truco/types.ts';
+import type { Card, Player, RoundWinner, GameScore, TrucoCall, EnvidoBid, CallResponse } from '../truco/types.ts';
 
 /**
  * Question primitives matching TypeSafe AI ("System One") schema
@@ -15,6 +15,7 @@ export interface NoulQuestion {
 export interface ScoreQuestion {
   instructions: string;
   scale?: { min: number; max: number };
+  levels?: string[];
 }
 
 /**
@@ -40,9 +41,44 @@ export interface TableTrick {
  * Current Truco or Envido bid status
  */
 export interface JevBidState {
-  type: TrucoCall | EnvidoCall | CallResponse | null;
+  type: TrucoCall | EnvidoBid | CallResponse | null;
   offeredBy: Player | null;
   level?: number;
+}
+
+/**
+ * Opponent (player) behavior statistics accumulated over the match.
+ * Fed into the state so Jev can adapt its judgments to this rival.
+ */
+export interface JevPlayerProfile {
+  handsPlayed: number;
+  trucoCalls: number;
+  trucoResponses: number;
+  trucoFolds: number;
+  envidoCalls: number;
+  envidoResponses: number;
+  envidoFolds: number;
+  envidoDeclarations: number[];
+}
+
+/**
+ * Deterministic facts computed in code before asking the model.
+ * The model judges strategy; it never has to compute truco hierarchy
+ * or envido arithmetic itself.
+ */
+export interface JevComputedState {
+  envidoPoints: number;
+  envidoCardsUsed: string[];
+  cardRanks: { id: string; name: string; rank: number }[];
+  maxRank: number;
+  strongCardCount: number;
+  canBeatPlayerCard: boolean;
+  lowestWinningCardId: string | null;
+  trickRecord: { jev: number; player: number; ties: number };
+  pointsAtStake: number;
+  faltaEnvidoValue: number;
+  inBuenas: boolean;
+  scorePressure: 'low' | 'medium' | 'high' | 'critical';
 }
 
 /**
@@ -61,18 +97,25 @@ export interface JevState {
   trucoLevel?: 0 | 1 | 2 | 3;
   trucoAccepted?: boolean;
   trucoOfferedBy?: Player | null;
+  computed?: JevComputedState;
+  playerProfile?: JevPlayerProfile;
+  availableCalls?: string[];
 }
 
 export type JevContext = 'play_card' | 'respond_envido' | 'respond_truco' | 'initiate_call';
 
+export type JevDifficulty = 'easy' | 'normal' | 'hard';
+
 export interface JevDecisionRequest {
   state: JevState;
   context: JevContext;
+  difficulty?: JevDifficulty;
 }
 
 export interface JevChoiceResult {
   choice: string;
   confidence: number;
+  probabilities?: Record<string, number>;
 }
 
 export interface JevNoulResult {
@@ -90,7 +133,7 @@ export interface JevDecisionQuestions {
 }
 
 export interface JevDecisionResponse {
-  mode: 'live_api' | 'local_simulator';
+  mode: 'live_api' | 'local_simulator' | 'deterministic';
   latencyMs: number;
   choices: Record<string, JevChoiceResult>;
   nouls: Record<string, JevNoulResult>;

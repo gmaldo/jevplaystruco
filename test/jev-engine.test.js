@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { getCard } from '../lib/truco/cards.ts';
 import { simulateJevDecision, buildQuestionsForContext } from '../lib/jev/simulator.ts';
+import { computeJevContext } from '../lib/jev/analysis.ts';
 import { getJevDecision, formatQuestionsForSystemOne } from '../lib/jev/client.ts';
 import { POST } from '../app/api/jev/decision/route.ts';
 
@@ -35,6 +36,91 @@ describe('Jev Decision Engine - Questions Builder', () => {
         }
       }
     }
+  });
+
+  it('writes instructions in English with backticked state paths', () => {
+    const dummyState = {
+      hand: [getCard(7, 'espada'), getCard(6, 'espada'), getCard(1, 'copa')],
+      round: 1,
+      tableTricks: [],
+      currentBid: null,
+      score: { player: 0, jev: 0, target: 30 },
+      mano: 'player',
+    };
+
+    for (const context of ['play_card', 'respond_envido', 'respond_truco', 'initiate_call']) {
+      const q = buildQuestionsForContext(context, dummyState);
+      const all = [
+        ...Object.values(q.choices || {}),
+        ...Object.values(q.nouls || {}),
+        ...Object.values(q.scores || {}),
+      ];
+      for (const item of all) {
+        assert.ok(
+          /`[a-zA-Z]/.test(item.instructions),
+          `Context ${context} instructions must reference state with backticked paths: "${item.instructions}"`
+        );
+      }
+    }
+  });
+});
+
+describe('Jev Decision Engine - Computed State', () => {
+  it('computes envido points, card ranks and trick record', () => {
+    const state = {
+      hand: [getCard(7, 'espada'), getCard(6, 'espada'), getCard(4, 'copa')],
+      allCardsJev: [getCard(7, 'espada'), getCard(6, 'espada'), getCard(4, 'copa')],
+      round: 2,
+      tableTricks: [
+        { trickNumber: 1, playerCard: getCard(2, 'oro'), jevCard: getCard(3, 'copa'), winner: 'jev' },
+      ],
+      currentBid: { type: 'truco', offeredBy: 'player' },
+      score: { player: 10, jev: 14, target: 30 },
+      mano: 'player',
+    };
+
+    const computed = computeJevContext(state);
+    assert.equal(computed.envidoPoints, 33); // 7+6 espada + 20
+    assert.equal(computed.maxRank, 12); // 7 de espada
+    assert.equal(computed.strongCardCount, 1);
+    assert.equal(computed.cardRanks.length, 3);
+    assert.equal(computed.cardRanks[0].id, '7_espada');
+    assert.deepEqual(computed.trickRecord, { jev: 1, player: 0, ties: 0 });
+    assert.equal(computed.pointsAtStake, 2);
+    assert.equal(computed.inBuenas, false);
+    assert.equal(computed.scorePressure, 'low');
+  });
+
+  it('detects canBeatPlayerCard and lowestWinningCardId', () => {
+    const state = {
+      hand: [getCard(1, 'espada'), getCard(3, 'basto'), getCard(4, 'copa')],
+      round: 1,
+      tableTricks: [{ trickNumber: 1, playerCard: getCard(2, 'oro') }],
+      playerCardOnTable: getCard(2, 'oro'),
+      currentBid: null,
+      score: { player: 0, jev: 0, target: 30 },
+      mano: 'player',
+    };
+
+    const computed = computeJevContext(state);
+    assert.equal(computed.canBeatPlayerCard, true);
+    assert.equal(computed.lowestWinningCardId, '3_basto'); // lowest card that still kills rank 9
+  });
+
+  it('marks scorePressure critical when points at stake decide the match', () => {
+    const state = {
+      hand: [getCard(4, 'copa')],
+      round: 3,
+      tableTricks: [],
+      currentBid: { type: 'vale_cuatro', offeredBy: 'player' },
+      score: { player: 28, jev: 27, target: 30 },
+      mano: 'player',
+    };
+
+    const computed = computeJevContext(state);
+    assert.equal(computed.pointsAtStake, 4);
+    assert.equal(computed.inBuenas, true);
+    assert.equal(computed.scorePressure, 'critical');
   });
 });
 
