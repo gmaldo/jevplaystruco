@@ -15,11 +15,14 @@ Hoy `JevState` envía cartas crudas y el modelo debe inferir jerarquía de truco
 - Engram mirror `odd/jev-stronger-opponent/tasks`: PENDIENTE (mem_* tools no disponibles en este entorno).
 
 ## Task Checklist
-- [ ] Task 1: Estado computado (`computed` en JevState: envidoPoints, cardRanks, maxRank, canBeatPlayerCard, trickRecord, pointsAtStake, scorePressure, inBuenas) calculado en `lib/jev/analysis.ts`; instrucciones en inglés con paths backticked; `ScoreQuestion.levels` por pregunta en vez de leyenda hardcodeada. (Route: direct inline)
-- [ ] Task 2: `probabilities` preservadas en respuestas (parseo live + emisión en simulador), `sampleChoice` para estrategia mixta, routing por confidence baja al simulador, preguntas atómicas extra (`opponent_likely_bluffing`, `jev_can_win_hand`) y composición de respuestas en código para `respond_*`. (Route: direct inline)
-- [ ] Task 3: Fusión de requests: `availableCalls` en JevState + `opening_call` choice dentro de `play_card`; hook hace una sola consulta y aplica canto + carta. `initiate_call` queda soportado para compatibilidad. (Route: direct inline)
-- [ ] Task 4: Dificultad (`easy`/`normal`/`hard`) con selector en SettingsModal, `playerProfile` trackeado en el hook y enviado en hard, estrategia mixta solo en hard (acciones/cantos; carta sigue argmax), inyección de errores en easy, short-circuits deterministas (una sola carta; mano ganada con ancho tras ganar primera) con mode `deterministic`. (Route: direct inline)
-- [ ] Task 5: README (dificultad, arquitectura, nuevas preguntas) + verificación final completa. (Route: direct inline)
+- [x] Task 1: Estado computado (`computed` en JevState: envidoPoints, cardRanks, maxRank, canBeatPlayerCard, trickRecord, pointsAtStake, scorePressure, inBuenas) calculado en `lib/jev/analysis.ts`; instrucciones en inglés con paths backticked; `ScoreQuestion.levels` por pregunta en vez de leyenda hardcodeada. (Route: direct inline. Commit: dcfe221. Verified: 80/80 tests, ESLint limpio, build exitoso)
+- [x] Task 2: `probabilities` preservadas en respuestas (parseo live + emisión en simulador), `sampleChoice` para estrategia mixta, routing por confidence baja al simulador, preguntas atómicas extra (`opponent_likely_bluffing`, `jev_can_win_hand`) y composición de respuestas en código para `respond_*`. (Route: direct inline. Commit: 755cc9f. Verified: 85/85 tests incl. servidor HTTP local que valida veto de raises y recalibración por baja confianza)
+- [x] Task 3: Fusión de requests: `availableCalls` en JevState + `opening_call` choice dentro de `play_card`; hook hace una sola consulta y aplica canto + carta. `initiate_call` queda soportado para compatibilidad. (Route: direct inline. Commit: 14e7f4e. Verified: 88/88 tests, ESLint limpio, build exitoso)
+- [x] Task 4: Dificultad (`easy`/`normal`/`hard`) con selector en SettingsModal, `playerProfile` trackeado en el hook y enviado en hard, estrategia mixta solo en hard (acciones/cantos; carta sigue argmax), inyección de errores en easy, short-circuits deterministas (una sola carta; mano ganada con ancho tras ganar primera) con mode `deterministic`. (Route: direct inline. Commit: 4c566f4. Verified: 92/92 tests, ESLint limpio, build exitoso)
+- [x] Task 5: README (dificultad, arquitectura, nuevas preguntas) + verificación final completa. (Route: direct inline. Verified: 92/92 tests / 24 suites, lint 0 errores, build exitoso)
 
 ## Verification Evidence & Next Step
-(pending)
+- Suite completa: 92/92 tests en 24 suites (`npm test`), ESLint 0 errores (`npm run lint`), build de producción exitoso (`npm run build`).
+- Commits: dcfe221 (computed state + instrucciones), 755cc9f (composición + probabilidades), 14e7f4e (single-request), 4c566f4 (dificultad + perfil rival + determinista).
+- Engram mirror `odd/jev-stronger-opponent/tasks`: PENDIENTE — las herramientas mem_* no están disponibles en este entorno; el progreso quedó persistido en este archivo.
+- Next step sugerido: jugar una partida en modo Difícil con `JEV_API_KEY` configurada para validar en vivo la composición de respuestas y la estrategia mixta; calibrar umbrales (confidence <45%, veto <30%) con decisiones logueadas.
