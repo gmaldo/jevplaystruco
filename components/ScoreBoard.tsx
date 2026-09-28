@@ -18,7 +18,7 @@ export function MatchstickBox({ count = 0 }: { count: number }) {
   return (
     <svg
       viewBox="0 0 44 44"
-      className="w-8 h-8 sm:w-10 sm:h-10 transition-all duration-300"
+      className="w-7 h-7 xs:w-8 xs:h-8 sm:w-10 sm:h-10 transition-all duration-300"
       xmlns="http://www.w3.org/2000/svg"
     >
       {/* Background slot */}
@@ -125,7 +125,8 @@ export function ScoreBoard({ state, className = '' }: ScoreBoardProps) {
 
   return (
     <div
-      className={`rounded-2xl border border-amber-900/60 bg-gradient-to-b from-stone-900 via-stone-950 to-neutral-950 p-4 text-amber-100 shadow-xl backdrop-blur-md ${className}`}
+      id="tanteador"
+      className={`rounded-2xl border border-amber-900/60 bg-gradient-to-b from-stone-900 via-stone-950 to-neutral-950 p-3 sm:p-4 text-amber-100 shadow-xl backdrop-blur-md ${className}`}
     >
       {/* Header bar: Match info & Current stake */}
       <div className="flex items-center justify-between border-b border-amber-900/40 pb-3 mb-3">

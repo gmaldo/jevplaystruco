@@ -122,7 +122,7 @@ export function GameTable({
 
   return (
     <div
-      className={`relative w-full rounded-3xl overflow-hidden border-[10px] border-[#382212] shadow-2xl bg-gradient-to-b from-[#06331a] via-[#094723] to-[#042412] flex flex-col justify-between p-3 sm:p-5 select-none min-h-[620px] ${className}`}
+      className={`relative w-full rounded-2xl sm:rounded-3xl overflow-hidden border-4 sm:border-8 lg:border-[10px] border-[#382212] shadow-2xl bg-gradient-to-b from-[#06331a] via-[#094723] to-[#042412] flex flex-col justify-between p-2 sm:p-4 lg:p-5 select-none min-h-[480px] sm:min-h-[560px] lg:min-h-[620px] ${className}`}
       style={{
         boxShadow:
           'inset 0 0 100px rgba(0,0,0,0.7), 0 20px 40px rgba(0,0,0,0.6)',
@@ -219,8 +219,8 @@ export function GameTable({
         )}
 
         {/* Center Green Table Cloth / Trick Mat */}
-        <div className="w-full max-w-xl rounded-2xl bg-black/30 border border-emerald-600/30 p-2 sm:p-4 backdrop-blur-sm shadow-inner">
-          <div className="grid grid-cols-3 gap-2 sm:gap-4 divide-x divide-emerald-800/40">
+        <div className="w-full max-w-xl rounded-2xl bg-black/30 border border-emerald-600/30 p-1.5 sm:p-3 md:p-4 backdrop-blur-sm shadow-inner">
+          <div className="grid grid-cols-3 gap-1 sm:gap-3 md:gap-4 divide-x divide-emerald-800/40">
             {[1, 2, 3].map((trickNum) => {
               const trick = table.find((t) => t.round === trickNum);
               const isCurrentTrick = round === trickNum && phase === 'playing';
@@ -228,42 +228,42 @@ export function GameTable({
               return (
                 <div
                   key={`trick-${trickNum}`}
-                  className={`flex flex-col items-center justify-between p-1.5 sm:p-2 rounded-xl transition-all ${
+                  className={`flex flex-col items-center justify-between p-1 sm:p-2 rounded-xl transition-all ${
                     isCurrentTrick
                       ? 'bg-emerald-900/30 border border-amber-400/40 shadow-sm'
                       : ''
                   }`}
                 >
                   {/* Trick Header */}
-                  <div className="flex items-center gap-1 mb-1">
-                    <span className="text-[11px] font-mono font-bold text-emerald-300/80">
+                  <div className="flex items-center gap-1 mb-0.5 sm:mb-1">
+                    <span className="text-[10px] sm:text-[11px] font-mono font-bold text-emerald-300/80">
                       {trickNum}ª Mano
                     </span>
                     {getTrickResultBadge(trickNum)}
                   </div>
 
                   {/* Jev Played Card */}
-                  <div className="h-20 sm:h-24 flex items-center justify-center">
+                  <div className="h-16 sm:h-20 md:h-24 flex items-center justify-center">
                     {trick?.jevCard ? (
                       <CardView card={trick.jevCard} size="sm" />
                     ) : (
-                      <div className="w-14 h-20 sm:w-16 sm:h-24 rounded-xl border border-dashed border-emerald-700/40 flex items-center justify-center text-[10px] text-emerald-600/60 font-mono">
+                      <div className="w-11 h-16 sm:w-14 sm:h-20 md:w-16 md:h-24 rounded-lg sm:rounded-xl border border-dashed border-emerald-700/40 flex items-center justify-center text-[9px] sm:text-[10px] text-emerald-600/60 font-mono">
                         Jev
                       </div>
                     )}
                   </div>
 
                   {/* VS divider */}
-                  <span className="text-[10px] font-mono font-bold text-amber-400/50 my-1">
+                  <span className="text-[9px] sm:text-[10px] font-mono font-bold text-amber-400/50 my-0.5 sm:my-1">
                     VS
                   </span>
 
                   {/* Player Played Card */}
-                  <div className="h-20 sm:h-24 flex items-center justify-center">
+                  <div className="h-16 sm:h-20 md:h-24 flex items-center justify-center">
                     {trick?.playerCard ? (
                       <CardView card={trick.playerCard} size="sm" />
                     ) : (
-                      <div className="w-14 h-20 sm:w-16 sm:h-24 rounded-xl border border-dashed border-emerald-700/40 flex items-center justify-center text-[10px] text-emerald-600/60 font-mono">
+                      <div className="w-11 h-16 sm:w-14 sm:h-20 md:w-16 md:h-24 rounded-lg sm:rounded-xl border border-dashed border-emerald-700/40 flex items-center justify-center text-[9px] sm:text-[10px] text-emerald-600/60 font-mono">
                         Tú
                       </div>
                     )}
@@ -278,25 +278,25 @@ export function GameTable({
       {/* ------------------------------------------------------------- */}
       {/* BOTTOM AREA: Player Hand, Envido Badge & Action Controls */}
       {/* ------------------------------------------------------------- */}
-      <div className="relative z-10 flex flex-col items-center gap-3">
+      <div className="relative z-10 flex flex-col items-center gap-2 sm:gap-3">
         {/* Player Envido Badge & Helper */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-stone-900/85 border border-amber-600/40 shadow text-amber-100 text-xs">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-stone-900/85 border border-amber-600/40 shadow text-amber-100 text-[11px] sm:text-xs">
             <span>🌾</span>
-            <span className="font-serif font-bold">Tus tantos de Envido:</span>
-            <span suppressHydrationWarning className="font-mono font-black text-amber-300 text-sm">
+            <span className="font-serif font-bold">Tantos Envido:</span>
+            <span suppressHydrationWarning className="font-mono font-black text-amber-300 text-xs sm:text-sm">
               {envidoCalc.score}
             </span>
             {envidoCalc.cardsUsed.length > 0 && (
-              <span className="text-[10px] text-stone-400">
-                ({envidoCalc.cardsUsed.map((c) => `${c.value} de ${c.suit}`).join(' + ')})
+              <span className="text-[9px] sm:text-[10px] text-stone-400 hidden xs:inline">
+                ({envidoCalc.cardsUsed.map((c) => `${c.value} ${c.suit.slice(0, 3)}`).join('+')})
               </span>
             )}
           </div>
         </div>
 
         {/* Player's Cards (Interactive Hand) */}
-        <div className="flex items-center justify-center gap-2 sm:gap-4 px-2 py-1">
+        <div className="flex items-center justify-center gap-1.5 sm:gap-4 px-1 py-1">
           {playerHand.map((card, idx) => (
             <div
               key={card.id || `player-card-${idx}`}

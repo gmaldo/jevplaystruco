@@ -198,8 +198,8 @@ function getFigureTitle(value: Value): string | null {
 }
 
 function CardCenter({ card, size }: { card: Card; size: 'sm' | 'md' | 'lg' }) {
-  const iconSize = size === 'sm' ? 'w-5 h-5' : size === 'md' ? 'w-7 h-7' : 'w-9 h-9';
-  const heroSize = size === 'sm' ? 'w-10 h-10' : size === 'md' ? 'w-14 h-14' : 'w-20 h-20';
+  const iconSize = size === 'sm' ? 'w-3.5 h-3.5 sm:w-5 sm:h-5' : size === 'md' ? 'w-5 h-5 sm:w-7 sm:h-7' : 'w-7 h-7 sm:w-9 sm:h-9';
+  const heroSize = size === 'sm' ? 'w-7 h-7 sm:w-10 sm:h-10' : size === 'md' ? 'w-10 h-10 sm:w-14 sm:h-14' : 'w-14 h-14 sm:w-20 sm:h-20';
 
   // Highlight special cards
   const isAnchoEspada = card.value === 1 && card.suit === 'espada';
@@ -411,16 +411,16 @@ export function CardView({
 }: CardViewProps) {
   // Sizing definitions
   const sizeClasses = {
-    sm: 'w-14 h-20 sm:w-16 sm:h-24 text-xs',
-    md: 'w-20 h-32 sm:w-24 sm:h-36 text-sm',
-    lg: 'w-28 h-42 sm:w-32 sm:h-48 text-base',
+    sm: 'w-12 h-18 sm:w-16 sm:h-24 text-[10px] sm:text-xs',
+    md: 'w-[4.6rem] h-[7.2rem] xs:w-20 xs:h-32 sm:w-24 sm:h-36 text-xs sm:text-sm',
+    lg: 'w-24 h-36 sm:w-32 sm:h-48 text-sm sm:text-base',
   }[size];
 
   // If face down or no card provided, render card back
   if (faceDown || !card) {
     return (
       <div
-        className={`relative select-none transition-all duration-200 rounded-xl p-[2px] bg-amber-200/40 shadow-md ${sizeClasses} ${
+        className={`relative select-none transition-all duration-200 rounded-xl p-[2px] bg-amber-200/40 shadow-md touch-manipulation ${sizeClasses} ${
           onClick && !disabled ? 'cursor-pointer hover:-translate-y-1 hover:shadow-xl' : ''
         } ${disabled ? 'opacity-60 cursor-not-allowed' : ''} ${className}`}
         onClick={!disabled ? onClick : undefined}
@@ -435,13 +435,13 @@ export function CardView({
   return (
     <div
       onClick={!disabled ? onClick : undefined}
-      className={`group relative select-none rounded-xl transition-all duration-200 ${sizeClasses} ${
+      className={`group relative select-none rounded-xl transition-all duration-200 touch-manipulation ${sizeClasses} ${
         onClick && !disabled
           ? 'cursor-pointer hover:-translate-y-2 hover:shadow-2xl active:translate-y-0 active:scale-95'
           : ''
       } ${
         isHighlighted
-          ? 'ring-4 ring-amber-400 -translate-y-2 shadow-xl shadow-amber-500/40'
+          ? 'ring-3 sm:ring-4 ring-amber-400 -translate-y-2 shadow-xl shadow-amber-500/40'
           : 'shadow-md hover:shadow-lg'
       } ${
         disabled ? 'opacity-60 cursor-not-allowed hover:translate-y-0' : ''

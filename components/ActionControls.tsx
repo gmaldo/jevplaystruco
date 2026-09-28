@@ -102,7 +102,7 @@ export function ActionControls({
   if (phase === 'truco_called' && turn === 'player') {
     const currentBid = trucoState.currentBid;
     return (
-      <div className={`flex flex-wrap items-center justify-center gap-2 p-3 bg-stone-950/90 rounded-2xl border border-amber-500/60 shadow-xl backdrop-blur-md ${className}`}>
+      <div className={`flex flex-wrap items-center justify-center gap-2 p-2.5 sm:p-3 bg-stone-950/90 rounded-2xl border border-amber-500/60 shadow-xl backdrop-blur-md ${className}`}>
         <span className="w-full text-center text-xs font-serif font-bold uppercase tracking-wider text-amber-300 mb-1">
           🤖 Jev cantó {currentBid.toUpperCase()} — ¿Qué respondes?
         </span>
@@ -113,7 +113,7 @@ export function ActionControls({
             sounds.playQuiero();
             onRespondTruco('quiero');
           }}
-          className="px-4 py-2 rounded-xl font-serif font-bold text-sm bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-950/50 active:scale-95 transition-all cursor-pointer"
+          className="px-4 py-2.5 min-h-[44px] touch-manipulation rounded-xl font-serif font-bold text-xs sm:text-sm bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white shadow-md shadow-emerald-950/50 active:scale-95 transition-all cursor-pointer flex items-center justify-center"
         >
           ✓ ¡QUIERO!
         </button>
@@ -124,7 +124,7 @@ export function ActionControls({
             sounds.playNoQuiero();
             onRespondTruco('no_quiero');
           }}
-          className="px-4 py-2 rounded-xl font-serif font-bold text-sm bg-rose-700 hover:bg-rose-600 text-white shadow-md shadow-rose-950/50 active:scale-95 transition-all cursor-pointer"
+          className="px-4 py-2.5 min-h-[44px] touch-manipulation rounded-xl font-serif font-bold text-xs sm:text-sm bg-rose-700 hover:bg-rose-600 active:bg-rose-800 text-white shadow-md shadow-rose-950/50 active:scale-95 transition-all cursor-pointer flex items-center justify-center"
         >
           ✗ NO QUIERO
         </button>
@@ -136,7 +136,7 @@ export function ActionControls({
               sounds.playRetruco();
               onRespondTruco('retruco');
             }}
-            className="px-4 py-2 rounded-xl font-serif font-bold text-sm bg-amber-600 hover:bg-amber-500 text-white shadow-md shadow-amber-950/50 active:scale-95 transition-all cursor-pointer"
+            className="px-4 py-2.5 min-h-[44px] touch-manipulation rounded-xl font-serif font-bold text-xs sm:text-sm bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white shadow-md shadow-amber-950/50 active:scale-95 transition-all cursor-pointer flex items-center justify-center"
           >
             🔥 ¡QUIERO RETRUCO! (3 pts)
           </button>
@@ -149,7 +149,7 @@ export function ActionControls({
               sounds.playValeCuatro();
               onRespondTruco('vale_cuatro');
             }}
-            className="px-4 py-2 rounded-xl font-serif font-bold text-sm bg-purple-600 hover:bg-purple-500 text-white shadow-md shadow-purple-950/50 active:scale-95 transition-all cursor-pointer"
+            className="px-4 py-2.5 min-h-[44px] touch-manipulation rounded-xl font-serif font-bold text-xs sm:text-sm bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white shadow-md shadow-purple-950/50 active:scale-95 transition-all cursor-pointer flex items-center justify-center"
           >
             ⚡ ¡VALE CUATRO! (4 pts)
           </button>
@@ -162,7 +162,7 @@ export function ActionControls({
               sounds.playEnvido();
               onCallEnvido('envido');
             }}
-            className="px-4 py-2 rounded-xl font-serif font-bold text-sm bg-blue-700 hover:bg-blue-600 text-white shadow-md shadow-blue-950/50 active:scale-95 transition-all cursor-pointer"
+            className="px-4 py-2.5 min-h-[44px] touch-manipulation rounded-xl font-serif font-bold text-xs sm:text-sm bg-blue-700 hover:bg-blue-600 active:bg-blue-800 text-white shadow-md shadow-blue-950/50 active:scale-95 transition-all cursor-pointer flex items-center justify-center"
           >
             🌾 ¡EL ENVIDO VA PRIMERO!
           </button>
@@ -175,7 +175,7 @@ export function ActionControls({
   if (phase === 'envido_called' && turn === 'player') {
     const currentBid = envidoState.currentBid;
     return (
-      <div className={`flex flex-wrap items-center justify-center gap-2 p-3 bg-stone-950/90 rounded-2xl border border-blue-500/60 shadow-xl backdrop-blur-md ${className}`}>
+      <div className={`flex flex-wrap items-center justify-center gap-2 p-2.5 sm:p-3 bg-stone-950/90 rounded-2xl border border-blue-500/60 shadow-xl backdrop-blur-md ${className}`}>
         <span className="w-full text-center text-xs font-serif font-bold uppercase tracking-wider text-blue-300 mb-1">
           🤖 Jev cantó {currentBid.replace('_', ' ').toUpperCase()} — ¿Qué respondes?
         </span>
@@ -186,7 +186,7 @@ export function ActionControls({
             sounds.playQuiero();
             onRespondEnvido('quiero');
           }}
-          className="px-4 py-2 rounded-xl font-serif font-bold text-sm bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-950/50 active:scale-95 transition-all cursor-pointer"
+          className="px-4 py-2.5 min-h-[44px] touch-manipulation rounded-xl font-serif font-bold text-xs sm:text-sm bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white shadow-md shadow-emerald-950/50 active:scale-95 transition-all cursor-pointer flex items-center justify-center"
         >
           ✓ ¡QUIERO!
         </button>
@@ -197,7 +197,7 @@ export function ActionControls({
             sounds.playNoQuiero();
             onRespondEnvido('no_quiero');
           }}
-          className="px-4 py-2 rounded-xl font-serif font-bold text-sm bg-rose-700 hover:bg-rose-600 text-white shadow-md shadow-rose-950/50 active:scale-95 transition-all cursor-pointer"
+          className="px-4 py-2.5 min-h-[44px] touch-manipulation rounded-xl font-serif font-bold text-xs sm:text-sm bg-rose-700 hover:bg-rose-600 active:bg-rose-800 text-white shadow-md shadow-rose-950/50 active:scale-95 transition-all cursor-pointer flex items-center justify-center"
         >
           ✗ NO QUIERO
         </button>
@@ -223,7 +223,7 @@ export function ActionControls({
                 playAudio();
                 onCallEnvido(bid);
               }}
-              className="px-4 py-2 rounded-xl font-serif font-bold text-sm bg-blue-700 hover:bg-blue-600 text-white shadow-md shadow-blue-950/50 active:scale-95 transition-all cursor-pointer"
+              className="px-4 py-2.5 min-h-[44px] touch-manipulation rounded-xl font-serif font-bold text-xs sm:text-sm bg-blue-700 hover:bg-blue-600 active:bg-blue-800 text-white shadow-md shadow-blue-950/50 active:scale-95 transition-all cursor-pointer flex items-center justify-center"
             >
               {label}
             </button>
@@ -239,22 +239,30 @@ export function ActionControls({
   return (
     <div className={`flex flex-col items-center gap-2 ${className}`}>
       {/* Action Buttons Bar */}
-      <div className="flex flex-wrap items-center justify-center gap-2 p-2 bg-stone-950/80 rounded-2xl border border-stone-800 shadow-xl backdrop-blur-md">
+      <div className="flex flex-wrap items-center justify-center gap-2 p-1.5 sm:p-2 bg-stone-950/80 rounded-2xl border border-stone-800 shadow-xl backdrop-blur-md">
         {/* Cantar Envido Menu Trigger */}
         {canEnvido && (
           <div className="relative">
             <button
               onClick={() => setShowEnvidoMenu((v) => !v)}
-              className="px-3.5 py-2 rounded-xl font-serif font-bold text-xs sm:text-sm bg-stone-800 hover:bg-blue-900/60 text-blue-200 border border-blue-600/40 shadow-md active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+              className="px-3.5 py-2 sm:px-4 sm:py-2.5 min-h-[44px] touch-manipulation rounded-xl font-serif font-bold text-xs sm:text-sm bg-stone-800 hover:bg-blue-900/60 active:bg-blue-950 text-blue-200 border border-blue-600/40 shadow-md active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
             >
               <span>🌾</span>
               <span>Cantar Envido...</span>
               <span className="text-[10px]">▼</span>
             </button>
 
+            {/* Backdrop to close menu on outside tap */}
+            {showEnvidoMenu && (
+              <div
+                className="fixed inset-0 z-20"
+                onClick={() => setShowEnvidoMenu(false)}
+              />
+            )}
+
             {/* Dropdown for Envido variants */}
             {showEnvidoMenu && (
-              <div className="absolute bottom-full left-0 mb-2 w-48 rounded-xl bg-stone-900 border border-blue-600/50 shadow-2xl p-1.5 flex flex-col gap-1 z-30 animate-in fade-in zoom-in-95 duration-150">
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 mb-2 w-52 rounded-xl bg-stone-900 border border-blue-600/50 shadow-2xl p-1.5 flex flex-col gap-1 z-30 animate-in fade-in zoom-in-95 duration-150">
                 {availableEnvidoBids.map((bid) => {
                   const label =
                     bid === 'envido'
@@ -274,7 +282,7 @@ export function ActionControls({
                         setShowEnvidoMenu(false);
                         onCallEnvido(bid);
                       }}
-                      className="w-full text-left px-3 py-2 rounded-lg font-serif text-xs font-bold text-blue-100 hover:bg-blue-600/40 transition-colors flex items-center justify-between cursor-pointer"
+                      className="w-full text-left px-3 py-2.5 min-h-[44px] touch-manipulation rounded-lg font-serif text-xs font-bold text-blue-100 hover:bg-blue-600/40 active:bg-blue-600/60 transition-colors flex items-center justify-between cursor-pointer"
                     >
                       <span>{label}</span>
                     </button>
@@ -294,7 +302,7 @@ export function ActionControls({
               else if (availableTrucoBid === 'vale_cuatro') sounds.playValeCuatro();
               onCallTruco();
             }}
-            className="px-3.5 py-2 rounded-xl font-serif font-bold text-xs sm:text-sm bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white border border-amber-400/50 shadow-md shadow-amber-950/50 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 py-2 sm:px-4 sm:py-2.5 min-h-[44px] touch-manipulation rounded-xl font-serif font-bold text-xs sm:text-sm bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 active:from-amber-700 active:to-amber-800 text-white border border-amber-400/50 shadow-md shadow-amber-950/50 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <span>⚔️</span>
             <span>
@@ -314,7 +322,7 @@ export function ActionControls({
               sounds.playLose();
               onFold();
             }}
-            className="px-3.5 py-2 rounded-xl font-serif font-medium text-xs sm:text-sm bg-stone-900/80 hover:bg-rose-950/70 text-stone-400 hover:text-rose-300 border border-stone-700 hover:border-rose-800/60 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 py-2 sm:px-4 sm:py-2.5 min-h-[44px] touch-manipulation rounded-xl font-serif font-medium text-xs sm:text-sm bg-stone-900/80 hover:bg-rose-950/70 active:bg-rose-950 text-stone-400 hover:text-rose-300 border border-stone-700 hover:border-rose-800/60 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
             title="Abandonar la mano actual y otorgar los puntos en disputa al rival"
           >
             <span>🏳️</span>
