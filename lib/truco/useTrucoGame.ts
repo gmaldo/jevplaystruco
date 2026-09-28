@@ -9,7 +9,6 @@ import type {
   TableTrick as JevTableTrick,
 } from '../jev/types.ts';
 import { getJevDecision } from '../jev/client.ts';
-import { calculateEnvido } from './cards.ts';
 import { sounds } from '../sound/audio.ts';
 import {
   type MatchState,
@@ -182,41 +181,7 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
 
       console.log(`[JevTruco] 🤖 Turno de Jev (${context}). Preparando consulta a Jev...`);
 
-      // Check if Jev is Mano in Round 1 and holds strong envido to initiate call
-      if (
-        context === 'play_card' &&
-        state.round === 1 &&
-        state.envidoState.status === 'pending' &&
-        canCallEnvido(state, 'jev')
-      ) {
-        const jevCards = [...state.jevHand, ...state.playedJevCards];
-        const envidoScore = calculateEnvido(jevCards).score;
-        if (envidoScore >= 31) {
-          console.log(`[JevTruco] 🤖 Jev canta Real Envido de primera (${envidoScore} tantos)`);
-          sounds.playRealEnvido();
-          setState((current) =>
-            machineCallEnvido(
-              { ...current, isJevThinking: false },
-              'jev',
-              'real_envido'
-            )
-          );
-          return;
-        } else if (envidoScore >= 28) {
-          console.log(`[JevTruco] 🤖 Jev canta Envido de primera (${envidoScore} tantos)`);
-          sounds.playEnvido();
-          setState((current) =>
-            machineCallEnvido(
-              { ...current, isJevThinking: false },
-              'jev',
-              'envido'
-            )
-          );
-          return;
-        }
-      }
-
-      // Build JevState
+      // Build JevState (single source of truth for the model)
       const tableTricks: JevTableTrick[] = state.table.map((t) => ({
         trickNumber: t.round as 1 | 2 | 3,
         playerCard: t.playerCard,
@@ -278,41 +243,96 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
         trucoOfferedBy: state.trucoState.bidBy || null,
       };
 
-      let decision: JevDecisionResponse;
-      try {
-        console.log(`[JevTruco] 📡 Consultando /api/jev/decision...`);
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-        };
-        if (apiKey) {
-          headers['x-jev-api-key'] = apiKey;
-          headers['Authorization'] = `Bearer ${apiKey}`;
-        }
-        const response = await fetch('/api/jev/decision', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            state: jevState,
-            context,
-            apiKey: apiKey || undefined,
-          }),
-        });
+      const fetchJevDecision = async (
+        ctx: JevDecisionRequest['context'],
+        st: JevState
+      ): Promise<JevDecisionResponse> => {
+        try {
+          console.log(`[JevTruco] 📡 Consultando /api/jev/decision (${ctx})...`);
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+          };
+          if (apiKey) {
+            headers['x-jev-api-key'] = apiKey;
+            headers['Authorization'] = `Bearer ${apiKey}`;
+          }
+          const response = await fetch('/api/jev/decision', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              state: st,
+              context: ctx,
+              apiKey: apiKey || undefined,
+            }),
+          });
 
-        if (!response.ok) {
-          throw new Error(`Decision API status: ${response.status}`);
+          if (!response.ok) {
+            throw new Error(`Decision API status: ${response.status}`);
+          }
+          const dec = (await response.json()) as JevDecisionResponse;
+          console.log(
+            `[JevTruco] ✅ Respuesta recibida de API (${dec.mode}, ${dec.latencyMs}ms):`,
+            dec.decisionSummary
+          );
+          return dec;
+        } catch (err: unknown) {
+          console.warn(
+            `[JevTruco] ⚠️ Error en /api/jev/decision, usando fallback client:`,
+            err instanceof Error ? err.message : err
+          );
+          return getJevDecision({ state: st, context: ctx }, apiKey);
         }
-        decision = await response.json();
-        console.log(
-          `[JevTruco] ✅ Respuesta recibida de API (${decision.mode}, ${decision.latencyMs}ms):`,
-          decision.decisionSummary
-        );
-      } catch (err: unknown) {
-        console.warn(
-          `[JevTruco] ⚠️ Error en /api/jev/decision, usando fallback client:`,
-          err instanceof Error ? err.message : err
-        );
-        decision = await getJevDecision({ state: jevState, context }, apiKey);
+      };
+
+      // Todas las decisiones de canto las toma el modelo (contexto initiate_call).
+      // Solo se consulta cuando hay al menos un canto legal; el modelo elige entre
+      // envido / real_envido / falta_envido / truco / none.
+      if (context === 'play_card' && (canCallEnvido(state, 'jev') || canCallTruco(state, 'jev'))) {
+        const initDecision = await fetchJevDecision('initiate_call', jevState);
+
+        if (activeRequestIdRef.current !== currentRequestId) {
+          return;
+        }
+
+        const initChoice =
+          initDecision.choices?.action?.choice || initDecision.choices?.call?.choice || 'none';
+
+        if (
+          (initChoice === 'envido' ||
+            initChoice === 'real_envido' ||
+            initChoice === 'falta_envido') &&
+          canCallEnvido(state, 'jev') &&
+          getAvailableEnvidoBids(state, 'jev').includes(initChoice as EnvidoBid)
+        ) {
+          console.log(`[JevTruco] 🤖 Jev inicia canto (modelo): "${initChoice}"`);
+          setDecisionHistory((prev) => [initDecision, ...prev.slice(0, 29)]);
+          if (initChoice === 'envido') sounds.playEnvido();
+          else if (initChoice === 'real_envido') sounds.playRealEnvido();
+          else sounds.playFaltaEnvido();
+          setState((current) =>
+            machineCallEnvido(
+              { ...current, isJevThinking: false, lastJevDecision: initDecision },
+              'jev',
+              initChoice as EnvidoBid
+            )
+          );
+          return;
+        }
+
+        if (initChoice === 'truco' && canCallTruco(state, 'jev')) {
+          console.log(`[JevTruco] 🤖 Jev inicia canto (modelo): "truco"`);
+          setDecisionHistory((prev) => [initDecision, ...prev.slice(0, 29)]);
+          sounds.playTruco();
+          setState((current) =>
+            machineCallTruco({ ...current, isJevThinking: false, lastJevDecision: initDecision }, 'jev')
+          );
+          return;
+        }
+        // initChoice === 'none' o ilegal → se sigue a la decisión de carta (play_card) abajo.
       }
+
+      let decision: JevDecisionResponse;
+      decision = await fetchJevDecision(context, jevState);
 
       if (activeRequestIdRef.current !== currentRequestId) {
         return;
@@ -358,17 +378,8 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
         }
 
         if (context === 'play_card') {
-          // Check if Jev wanted to call truco before card play
-          const wantTruco =
-            decision.choices?.call?.choice === 'truco' &&
-            canCallTruco(stateWithDecision, 'jev');
-
-          if (wantTruco) {
-            console.log(`[JevTruco] 🤖 Jev canta ¡TRUCO! antes de jugar carta`);
-            sounds.playTruco();
-            return machineCallTruco(stateWithDecision, 'jev');
-          }
-
+          // El canto (truco/envido) ya lo decidió el modelo en el paso initiate_call.
+          // Acá solo se juega la carta elegida por el modelo.
           const cardChoice =
             decision.choices?.card?.choice || decision.choices?.action?.choice;
           const cardToPlay =
