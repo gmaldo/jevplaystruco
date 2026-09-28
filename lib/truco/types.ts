@@ -64,3 +64,16 @@ export interface GameScore {
   jev: number;
   target: 15 | 30;
 }
+
+export type {
+  GamePhase,
+  Turn,
+  TrucoBid,
+  EnvidoBid,
+  TableTrick,
+  EnvidoState,
+  TrucoState,
+  GameLogEntry,
+  MatchState,
+} from './game-machine.ts';
+
