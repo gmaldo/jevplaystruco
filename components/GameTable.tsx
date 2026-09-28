@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { Card, MatchState, EnvidoBid, TrucoBid } from '../lib/truco/types.ts';
 import { calculateEnvido } from '../lib/truco/cards.ts';
 import { CardView } from './CardView.tsx';
@@ -60,6 +60,20 @@ export function GameTable({
     log,
     lastJevDecision,
   } = state;
+
+  const [isEnvidoDismissed, setIsEnvidoDismissed] = useState(false);
+  const prevEnvidoStatusRef = useRef(envidoState.status);
+
+  useEffect(() => {
+    if (
+      envidoState.status === 'pending' ||
+      envidoState.status === 'active' ||
+      prevEnvidoStatusRef.current !== envidoState.status
+    ) {
+      setIsEnvidoDismissed(false);
+    }
+    prevEnvidoStatusRef.current = envidoState.status;
+  }, [envidoState.status]);
 
   // Calculate full player hand envido score (cards in hand + already played)
   const fullPlayerCards = [...playerHand, ...playedPlayerCards];
@@ -217,6 +231,84 @@ export function GameTable({
             <span>{lastCantoLog.text}</span>
           </div>
         )}
+
+        {/* Envido Resolution Cartelito */}
+        {!isEnvidoDismissed &&
+          (envidoState.status === 'resolved' ||
+            envidoState.status === 'declined') && (
+            <div className="mb-2 w-full max-w-xl px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl sm:rounded-2xl bg-stone-950/90 border border-amber-500/50 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between gap-2 border-b border-amber-500/20 pb-1.5 mb-1.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-amber-400 text-xs sm:text-sm">🌾</span>
+                  <span className="text-xs sm:text-sm font-serif font-bold text-amber-100">
+                    {envidoState.status === 'declined'
+                      ? 'Envido No Querido'
+                      : 'Resolución de Envido'}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Winner badge */}
+                  {envidoState.winner === 'player' ? (
+                    <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-600/90 text-white shadow flex items-center gap-1 border border-emerald-400/30">
+                      ✓ Ganaste (+{envidoState.pointsAwarded?.player ?? 0} pts)
+                    </span>
+                  ) : envidoState.winner === 'jev' ? (
+                    <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-cyan-700/90 text-white shadow flex items-center gap-1 border border-cyan-400/30">
+                      🤖 Jev ganó (+{envidoState.pointsAwarded?.jev ?? 0} pts)
+                    </span>
+                  ) : null}
+
+                  {/* Close button */}
+                  <button
+                    type="button"
+                    onClick={() => setIsEnvidoDismissed(true)}
+                    className="w-5 h-5 rounded-full flex items-center justify-center text-stone-400 hover:text-amber-200 hover:bg-stone-800/80 transition-colors text-xs font-mono"
+                    aria-label="Cerrar resolución de envido"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              {/* Body */}
+              {envidoState.status === 'resolved' && envidoState.declaredPoints && (
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm pt-0.5">
+                  <div className="flex items-center gap-3">
+                    <span className="text-stone-300">
+                      Tú:{' '}
+                      <strong className="font-mono font-bold text-emerald-400 text-sm sm:text-base">
+                        {envidoState.declaredPoints.player ?? 0}
+                      </strong>
+                    </span>
+                    <span className="text-stone-500 font-mono text-xs">vs</span>
+                    <span className="text-stone-300">
+                      Jev:{' '}
+                      <strong className="font-mono font-bold text-cyan-400 text-sm sm:text-base">
+                        {envidoState.declaredPoints.jev ?? 0}
+                      </strong>
+                    </span>
+                  </div>
+
+                  {envidoState.declaredPoints.player !== undefined &&
+                    envidoState.declaredPoints.player ===
+                      envidoState.declaredPoints.jev && (
+                      <span className="text-[10px] sm:text-xs text-amber-300 font-medium italic">
+                        (Define la Mano: {state.mano === 'player' ? 'Tú' : 'Jev'})
+                      </span>
+                    )}
+                </div>
+              )}
+
+              {envidoState.status === 'declined' && (
+                <div className="text-xs sm:text-sm text-stone-300 pt-0.5">
+                  {envidoState.winner === 'player'
+                    ? 'Jev no quiso el envido.'
+                    : 'No quisiste el envido.'}
+                </div>
+              )}
+            </div>
+          )}
 
         {/* Center Green Table Cloth / Trick Mat */}
         <div className="w-full max-w-xl rounded-2xl bg-black/30 border border-emerald-600/30 p-1.5 sm:p-3 md:p-4 backdrop-blur-sm shadow-inner">

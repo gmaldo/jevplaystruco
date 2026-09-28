@@ -181,6 +181,7 @@ describe('Game Machine - Envido Flow', () => {
     state = respondEnvido(state, 'quiero');
 
     assert.equal(state.envidoState.status, 'resolved');
+    assert.equal(state.envidoState.winner, 'player');
     assert.equal(state.envidoState.declaredPoints?.player, 33);
     assert.equal(state.envidoState.declaredPoints?.jev, 28);
     assert.equal(state.envidoState.pointsAwarded?.player, 2);
@@ -198,6 +199,7 @@ describe('Game Machine - Envido Flow', () => {
     state = respondEnvido(state, 'no_quiero');
 
     assert.equal(state.envidoState.status, 'declined');
+    assert.equal(state.envidoState.winner, 'player');
     assert.equal(state.scores.player, 1);
     assert.equal(state.scores.jev, 0);
     assert.equal(state.phase, 'playing');
@@ -215,6 +217,8 @@ describe('Game Machine - Envido Flow', () => {
 
     // Player declines
     state = respondEnvido(state, 'no_quiero');
+    assert.equal(state.envidoState.status, 'declined');
+    assert.equal(state.envidoState.winner, 'jev');
     assert.equal(state.scores.jev, 2); // 2 points from the envido bid
     assert.equal(state.scores.player, 0);
     assert.equal(state.phase, 'playing');
@@ -229,8 +233,53 @@ describe('Game Machine - Envido Flow', () => {
     state = respondEnvido(state, 'real_envido');
     state = respondEnvido(state, 'quiero');
 
+    assert.equal(state.envidoState.status, 'resolved');
+    assert.equal(state.envidoState.winner, 'player');
     assert.equal(state.scores.player, 5); // 33 beats 28
     assert.equal(state.scores.jev, 0);
+  });
+
+  it('Envido flow: sets envidoState.winner correctly on want and decline (including ties and match end)', () => {
+    // 1. Jev wins on quiero via higher score
+    let s1 = startNewMatch(30);
+    s1.playerHand = [getCard(4, 'espada'), getCard(5, 'basto'), getCard(6, 'oro')]; // 6
+    s1.jevHand = [getCard(7, 'copa'), getCard(6, 'copa'), getCard(1, 'oro')]; // 33
+    s1 = callEnvido(s1, 'player', 'envido');
+    s1 = respondEnvido(s1, 'quiero');
+    assert.equal(s1.envidoState.status, 'resolved');
+    assert.equal(s1.envidoState.winner, 'jev');
+
+    // 2. Tie points resolved by mano
+    let s2 = startNewMatch(30);
+    s2.mano = 'jev';
+    s2.playerHand = [getCard(7, 'espada'), getCard(6, 'espada'), getCard(1, 'oro')]; // 33
+    s2.jevHand = [getCard(7, 'copa'), getCard(6, 'copa'), getCard(2, 'oro')]; // 33
+    s2 = callEnvido(s2, 'jev', 'envido');
+    s2 = respondEnvido(s2, 'quiero');
+    assert.equal(s2.envidoState.status, 'resolved');
+    assert.equal(s2.envidoState.winner, 'jev'); // Jev was mano
+
+    // 3. Match ended on quiero sets winner
+    let s3 = startNewMatch(15);
+    s3.scores.player = 14;
+    s3.playerHand = [getCard(7, 'espada'), getCard(6, 'espada'), getCard(1, 'oro')]; // 33
+    s3.jevHand = [getCard(4, 'copa'), getCard(5, 'basto'), getCard(6, 'oro')]; // 6
+    s3 = callEnvido(s3, 'player', 'envido');
+    s3 = respondEnvido(s3, 'quiero');
+    assert.equal(s3.phase, 'match_ended');
+    assert.equal(s3.matchWinner, 'player');
+    assert.equal(s3.envidoState.status, 'resolved');
+    assert.equal(s3.envidoState.winner, 'player');
+
+    // 4. Match ended on no_quiero sets winner
+    let s4 = startNewMatch(15);
+    s4.scores.jev = 14;
+    s4 = callEnvido(s4, 'jev', 'envido');
+    s4 = respondEnvido(s4, 'no_quiero');
+    assert.equal(s4.phase, 'match_ended');
+    assert.equal(s4.matchWinner, 'jev');
+    assert.equal(s4.envidoState.status, 'declined');
+    assert.equal(s4.envidoState.winner, 'jev');
   });
 });
 

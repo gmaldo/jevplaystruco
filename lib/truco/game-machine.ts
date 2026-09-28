@@ -41,6 +41,7 @@ export interface EnvidoState {
   history: EnvidoBid[];
   pointsAwarded?: { player: number; jev: number };
   declaredPoints?: { player?: number; jev?: number };
+  winner?: Player;
 }
 
 export interface TrucoState {
@@ -609,6 +610,7 @@ export function respondEnvido(
         envidoState: {
           ...state.envidoState,
           status: 'declined',
+          winner: caller,
           pointsAwarded: {
             player: caller === 'player' ? points : 0,
             jev: caller === 'jev' ? points : 0,
@@ -636,6 +638,7 @@ export function respondEnvido(
       envidoState: {
         ...state.envidoState,
         status: 'declined',
+        winner: caller,
         pointsAwarded: {
           player: caller === 'player' ? points : 0,
           jev: caller === 'jev' ? points : 0,
@@ -692,6 +695,7 @@ export function respondEnvido(
       envidoState: {
         ...state.envidoState,
         status: 'resolved',
+        winner: winner,
         declaredPoints: { player: playerPoints, jev: jevPoints },
         pointsAwarded: {
           player: winner === 'player' ? points : 0,
@@ -719,6 +723,7 @@ export function respondEnvido(
     envidoState: {
       ...state.envidoState,
       status: 'resolved',
+      winner: winner,
       declaredPoints: { player: playerPoints, jev: jevPoints },
       pointsAwarded: {
         player: winner === 'player' ? points : 0,
