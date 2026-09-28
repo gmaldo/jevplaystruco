@@ -56,10 +56,19 @@ export async function POST(req: Request) {
       (typeof requestObj.model === 'string' && requestObj.model ? requestObj.model : undefined) ||
       undefined;
 
+    const stateObj = requestObj.state as Record<string, unknown> | undefined;
+    console.log(
+      `[Server /api/jev/decision] 📨 Petición recibida: context="${requestObj.context}", round=${stateObj?.round}, mano=${stateObj?.mano}`
+    );
+
     const decision = await getJevDecision(
       requestObj as unknown as JevDecisionRequest,
       apiKey,
       { endpoint, model }
+    );
+
+    console.log(
+      `[Server /api/jev/decision] 📤 Decisión devuelta (${decision.mode}, ${decision.latencyMs}ms): ${decision.decisionSummary}`
     );
 
     return Response.json(decision);

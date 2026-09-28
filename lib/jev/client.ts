@@ -60,6 +60,8 @@ export async function getJevDecision(
 
     const questions = buildQuestionsForContext(request.context, request.state);
 
+    console.log(`[Jev Client] 🚀 Conectando a ${endpoint} (modelo: ${model})...`);
+
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -84,6 +86,7 @@ export async function getJevDecision(
 
     const data = await res.json();
     const latencyMs = Date.now() - startTime;
+    console.log(`[Jev Client] ✅ Respuesta live exitosa de ${endpoint} en ${latencyMs}ms`);
 
     return {
       mode: 'live_api',
@@ -95,7 +98,9 @@ export async function getJevDecision(
       questions: data.questions || questions,
       model: data.model || model,
     };
-  } catch {
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.warn(`[Jev Client] ⚠️ No se pudo obtener respuesta live de ${endpoint} (${errorMsg}). Activando simulador local calibrado.`);
     // Graceful fallback to calibrated local simulator
     const fallback = simulateJevDecision(request);
     return {

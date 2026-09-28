@@ -68,7 +68,8 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
     return '';
   });
   const [decisionHistory, setDecisionHistory] = useState<JevDecisionResponse[]>([]);
-  const isExecutingJevRef = useRef<boolean>(false);
+  const lastExecutedActionKeyRef = useRef<string>('');
+  const activeRequestIdRef = useRef<number>(0);
 
   const handleSetApiKey = useCallback((key: string) => {
     setApiKey(key);
@@ -115,11 +116,13 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
   }, []);
 
   const startNewHandAction = useCallback(() => {
+    lastExecutedActionKeyRef.current = '';
     setState((current) => startNewHand(current));
   }, []);
 
   const restartMatchAction = useCallback(
     (target?: 15 | 30) => {
+      lastExecutedActionKeyRef.current = '';
       setDecisionHistory([]);
       setState(startNewMatch(target || initialTarget));
     },
@@ -130,28 +133,39 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
   useEffect(() => {
     const isJevTurn =
       state.turn === 'jev' &&
-      !state.isJevThinking &&
       state.phase !== 'match_ended' &&
       state.phase !== 'hand_ended' &&
       state.phase !== 'idle';
 
-    if (!isJevTurn || isExecutingJevRef.current) {
+    if (!isJevTurn) {
       return;
     }
 
-    isExecutingJevRef.current = true;
+    const actionKey = `${state.round}-${state.turn}-${state.phase}-${state.table
+      .map(
+        (t) =>
+          `${t.round}:${t.playerCard?.id || ''}:${t.jevCard?.id || ''}:${t.winner || ''}`
+      )
+      .join('-')}-${state.envidoState.status}:${state.envidoState.currentBid}-${state.trucoState.status}:${state.trucoState.currentBid}`;
+
+    if (lastExecutedActionKeyRef.current === actionKey) {
+      return;
+    }
+
+    lastExecutedActionKeyRef.current = actionKey;
+    const currentRequestId = ++activeRequestIdRef.current;
 
     // Set isJevThinking to true immediately so UI updates
-    setState((current) => ({ ...current, isJevThinking: true }));
-
-    let isMounted = true;
+    setState((current) => {
+      if (current.isJevThinking) return current;
+      return { ...current, isJevThinking: true };
+    });
 
     const executeJevDecision = async () => {
-      // Natural delay (600ms) for human-like pacing and UI feedback
-      await new Promise((resolve) => setTimeout(resolve, 600));
+      // Natural delay (500ms) for human-like pacing and UI feedback
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
-      if (!isMounted) {
-        isExecutingJevRef.current = false;
+      if (activeRequestIdRef.current !== currentRequestId) {
         return;
       }
 
@@ -165,6 +179,8 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
         context = 'play_card';
       }
 
+      console.log(`[JevTruco] 🤖 Turno de Jev (${context}). Preparando consulta a Jev...`);
+
       // Check if Jev is Mano in Round 1 and holds strong envido to initiate call
       if (
         context === 'play_card' &&
@@ -175,6 +191,7 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
         const jevCards = [...state.jevHand, ...state.playedJevCards];
         const envidoScore = calculateEnvido(jevCards).score;
         if (envidoScore >= 31) {
+          console.log(`[JevTruco] 🤖 Jev canta Real Envido de primera (${envidoScore} tantos)`);
           setState((current) =>
             machineCallEnvido(
               { ...current, isJevThinking: false },
@@ -182,9 +199,9 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
               'real_envido'
             )
           );
-          isExecutingJevRef.current = false;
           return;
         } else if (envidoScore >= 28) {
+          console.log(`[JevTruco] 🤖 Jev canta Envido de primera (${envidoScore} tantos)`);
           setState((current) =>
             machineCallEnvido(
               { ...current, isJevThinking: false },
@@ -192,7 +209,6 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
               'envido'
             )
           );
-          isExecutingJevRef.current = false;
           return;
         }
       }
@@ -261,6 +277,7 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
 
       let decision: JevDecisionResponse;
       try {
+        console.log(`[JevTruco] 📡 Consultando /api/jev/decision...`);
         const response = await fetch('/api/jev/decision', {
           method: 'POST',
           headers: {
@@ -279,13 +296,19 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
           throw new Error(`Decision API status: ${response.status}`);
         }
         decision = await response.json();
-      } catch {
-        // Graceful fallback to client simulator
+        console.log(
+          `[JevTruco] ✅ Respuesta recibida de API (${decision.mode}, ${decision.latencyMs}ms):`,
+          decision.decisionSummary
+        );
+      } catch (err: unknown) {
+        console.warn(
+          `[JevTruco] ⚠️ Error en /api/jev/decision, usando fallback client:`,
+          err instanceof Error ? err.message : err
+        );
         decision = await getJevDecision({ state: jevState, context }, apiKey);
       }
 
-      if (!isMounted) {
-        isExecutingJevRef.current = false;
+      if (activeRequestIdRef.current !== currentRequestId) {
         return;
       }
 
@@ -307,6 +330,7 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
           const choice = (decision.choices?.action?.choice ||
             decision.choices?.envido_response?.choice ||
             'quiero') as 'quiero' | 'no_quiero' | 'real_envido' | 'falta_envido';
+          console.log(`[JevTruco] 🤖 Jev responde al Envido: "${choice}"`);
           return machineRespondEnvido(stateWithDecision, choice);
         }
 
@@ -314,6 +338,7 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
           const choice = (decision.choices?.action?.choice ||
             decision.choices?.truco_response?.choice ||
             'quiero') as 'quiero' | 'no_quiero' | 'retruco' | 'vale_cuatro';
+          console.log(`[JevTruco] 🤖 Jev responde al Truco: "${choice}"`);
           return machineRespondTruco(stateWithDecision, choice);
         }
 
@@ -324,6 +349,7 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
             canCallTruco(stateWithDecision, 'jev');
 
           if (wantTruco) {
+            console.log(`[JevTruco] 🤖 Jev canta ¡TRUCO! antes de jugar carta`);
             return machineCallTruco(stateWithDecision, 'jev');
           }
 
@@ -334,22 +360,16 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
             stateWithDecision.jevHand[0];
 
           if (cardToPlay) {
+            console.log(`[JevTruco] 🤖 Jev juega carta: ${cardToPlay.name}`);
             return playJevCard(stateWithDecision, cardToPlay);
           }
         }
 
         return stateWithDecision;
       });
-
-      isExecutingJevRef.current = false;
     };
 
     executeJevDecision();
-
-    return () => {
-      isMounted = false;
-      isExecutingJevRef.current = false;
-    };
   }, [state, apiKey]);
 
   return {
