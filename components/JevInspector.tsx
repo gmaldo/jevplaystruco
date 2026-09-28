@@ -1,7 +1,12 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import type { JevChoiceResult, JevDecisionResponse } from '../lib/jev/types.ts';
+import type {
+  JevChoiceResult,
+  JevDecisionResponse,
+  JevNoulResult,
+  JevScoreResult,
+} from '../lib/jev/types.ts';
 import type { MatchState } from '../lib/truco/types.ts';
 
 export interface JevInspectorProps {
@@ -36,6 +41,11 @@ interface HistoricalDecision {
   confidence?: number;
   bluffProb?: number;
   handStrength?: number;
+  context?: string;
+  questionLabels: string[];
+  rawChoices: Record<string, JevChoiceResult>;
+  rawNouls: Record<string, JevNoulResult>;
+  rawScores: Record<string, JevScoreResult>;
 }
 
 function formatDecisionNarrative(params: {
@@ -430,6 +440,18 @@ function whoLabel(who: 'player' | 'jev' | 'tie' | undefined): string {
   return '—';
 }
 
+const CONTEXT_LABELS: Record<string, string> = {
+  play_card: 'Jugar una carta',
+  respond_envido: 'Responder al Envido',
+  respond_truco: 'Responder al Truco',
+  initiate_call: 'Iniciar un canto',
+};
+
+/** Etiqueta legible para cualquier key de pregunta (choice, noul o score). */
+function friendlyQuestionLabel(key: string): string {
+  return QUESTION_LABELS[key] ?? NOUL_LABELS[key] ?? SCORE_LABELS[key] ?? friendlyChoiceLabel(key);
+}
+
 export function JevInspector({
   decision,
   state,
@@ -551,6 +573,15 @@ export function JevInspector({
         confidence,
         bluffProb,
         handStrength,
+        context: item.context,
+        questionLabels: [
+          ...Object.keys(item.questions?.choices ?? {}),
+          ...Object.keys(item.questions?.nouls ?? {}),
+          ...Object.keys(item.questions?.scores ?? {}),
+        ],
+        rawChoices: rawChoices,
+        rawNouls: item.nouls ?? {},
+        rawScores: item.scores ?? {},
       };
     });
   }, [history, decision, state.round]);
@@ -1158,6 +1189,109 @@ export function JevInspector({
                           )}
                         </div>
                       )}
+
+                      {/* Detalle completo de la llamada al modelo */}
+                      <details className="rounded-lg bg-stone-950/60 border border-stone-800/80">
+                        <summary className="p-2 text-[10px] font-mono text-cyan-400/80 hover:text-cyan-300 cursor-pointer select-none">
+                          📡 Ver llamada al modelo
+                        </summary>
+                        <div className="px-3 pb-3 space-y-3">
+                          {/* Contexto de la llamada */}
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-mono text-stone-400">
+                            {item.context && (
+                              <span>
+                                Contexto:{' '}
+                                <span className="text-cyan-300">
+                                  {CONTEXT_LABELS[item.context] ?? item.context}
+                                </span>
+                              </span>
+                            )}
+                            <span>
+                              Modo: <span className="text-cyan-300">{MODE_LABELS[item.mode] ?? item.mode}</span>
+                            </span>
+                            <span>
+                              Latencia: <span className="text-cyan-300">{item.latencyMs}ms</span>
+                            </span>
+                          </div>
+
+                          {/* Preguntas enviadas */}
+                          {item.questionLabels.length > 0 && (
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-mono text-stone-500 uppercase block">
+                                Preguntas que recibió:
+                              </span>
+                              <ul className="text-[11px] text-stone-300 space-y-0.5 list-disc list-inside">
+                                {item.questionLabels.map((label) => (
+                                  <li key={label}>{label}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Distribución completa de cada decisión */}
+                          {Object.keys(item.rawChoices).length > 0 && (
+                            <div className="space-y-2">
+                              <span className="text-[10px] font-mono text-stone-500 uppercase block">
+                                Respuesta completa:
+                              </span>
+                              {Object.entries(item.rawChoices).map(([key, val]) => (
+                                <div key={key} className="space-y-0.5">
+                                  <span className="text-[10px] text-stone-400">
+                                    {friendlyQuestionLabel(key)}
+                                  </span>
+                                  {Object.entries(val.probabilities ?? { [val.choice]: 1 })
+                                    .sort(([, a], [, b]) => b - a)
+                                    .map(([opt, p]) => {
+                                      const optPct = Math.round(p * 100);
+                                      const chosen = opt === val.choice;
+                                      return (
+                                        <div
+                                          key={opt}
+                                          className={`flex items-center justify-between text-[11px] rounded px-1.5 py-0.5 ${
+                                            chosen
+                                              ? 'bg-amber-950/40 text-amber-300 border border-amber-900/40'
+                                              : 'text-stone-400'
+                                          }`}
+                                        >
+                                          <span className="truncate">
+                                            {formatChoiceName(key, opt).text}
+                                            {chosen && ' ✓'}
+                                          </span>
+                                          <span className="font-mono font-bold ml-2">{optPct}%</span>
+                                        </div>
+                                      );
+                                    })}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Lecturas y valoraciones crudas */}
+                          {(Object.keys(item.rawNouls).length > 0 ||
+                            Object.keys(item.rawScores).length > 0) && (
+                            <div className="flex flex-wrap gap-2 text-[10px] font-mono">
+                              {Object.entries(item.rawNouls).map(([key, val]) => (
+                                <span
+                                  key={key}
+                                  className="bg-rose-950/30 text-rose-300 border border-rose-900/40 px-2 py-0.5 rounded-md"
+                                  title={key}
+                                >
+                                  {NOUL_LABELS[key] ?? key}: {Math.round(val.probability * 100)}%
+                                </span>
+                              ))}
+                              {Object.entries(item.rawScores).map(([key, val]) => (
+                                <span
+                                  key={key}
+                                  className="bg-blue-950/30 text-blue-300 border border-blue-900/40 px-2 py-0.5 rounded-md"
+                                  title={key}
+                                >
+                                  {SCORE_LABELS[key] ?? key}: {Math.round(val.score)}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </details>
                     </div>
                   ))}
                 </div>

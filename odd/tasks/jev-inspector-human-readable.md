@@ -15,6 +15,7 @@ Hoy el inspector expone internals del motor: nombres de primitivas, ids de pregu
 ## Task Checklist
 - [x] Task 1: Pestaña Decisión + badges + tabs: etiquetas humanas para choices/nouls/scores, dedupe de alias, fix del score /10, modo "En vivo/Local/Regla". (Route: direct inline — commit `75d0215`)
 - [x] Task 2: Pestañas "Qué evaluó Jev" (preguntas en lenguaje natural con opciones legibles) y "La Mesa" (resumen del estado en palabras + JSON colapsable). (Route: direct inline — commit pending)
+- [x] Task 3: Historial: cada entrada muestra la llamada al modelo (contexto, preguntas enviadas, distribución completa de probabilidades, nouls y scores) en bloque colapsable. (Route: direct inline)
 
 ## Verification Evidence & Next Step
 - `npm run lint` → clean (un warning menor corregido en Task 1).
