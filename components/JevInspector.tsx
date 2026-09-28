@@ -268,6 +268,12 @@ function formatChoiceName(choiceKey: string, choiceVal: string): { label: string
     const match = choiceVal.match(/(?:card[-_])?(\d+)[-_](\w+)/);
     if (match) {
       const [, val, suit] = match;
+      if (val === '1' && suit === 'espada') {
+        return { label: 'Carta Jugada', text: 'Ancho de espada ⚔️' };
+      }
+      if (val === '1' && suit === 'basto') {
+        return { label: 'Carta Jugada', text: 'Ancho de basto 🌿' };
+      }
       const suitEmoji =
         suit === 'espada' ? '⚔️' : suit === 'basto' ? '🌿' : suit === 'oro' ? '🪙' : '🍷';
       return { label: 'Carta Jugada', text: `${val} de ${suit} ${suitEmoji}` };

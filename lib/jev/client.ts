@@ -189,6 +189,8 @@ function formatCardDisplay(cardId: string): string {
   const match = cardId.match(/(?:card[-_])?(\d+)[-_](\w+)/);
   if (match) {
     const [, val, suit] = match;
+    if (val === '1' && suit === 'espada') return 'Ancho de espada ⚔️';
+    if (val === '1' && suit === 'basto') return 'Ancho de basto 🌿';
     const suitEmoji =
       suit === 'espada' ? '⚔️' : suit === 'basto' ? '🌿' : suit === 'oro' ? '🪙' : '🍷';
     return `${val} de ${suit} ${suitEmoji}`;

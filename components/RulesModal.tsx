@@ -42,8 +42,8 @@ export function RulesModal({ isOpen, onClose }: RulesModalProps) {
                 <span className="text-amber-400 font-bold block uppercase text-[10px]">
                   Cartas Bravas (Mayores)
                 </span>
-                <p>1. <strong>1 de Espada</strong> (El Macho / Ancho de espada)</p>
-                <p>2. <strong>1 de Basto</strong> (La Hembra / Ancho de basto)</p>
+                <p>1. <strong>Ancho de Espada</strong> (1 de Espada / El Macho)</p>
+                <p>2. <strong>Ancho de Basto</strong> (1 de Basto / La Hembra)</p>
                 <p>3. <strong>7 de Espada</strong> (Siete bravo)</p>
                 <p>4. <strong>7 de Oro</strong> (Siete bravo)</p>
               </div>

@@ -250,7 +250,7 @@ function CardCenter({ card, size }: { card: Card; size: 'sm' | 'md' | 'lg' }) {
         </div>
         {(isAnchoEspada || isAnchoBasto) && size !== 'sm' && (
           <span className="text-[9px] font-serif font-bold text-amber-800 tracking-wider bg-amber-200/60 px-1.5 py-0.5 rounded-full mt-1 border border-amber-300">
-            {isAnchoEspada ? 'Espadilla' : 'Basto Bravo'}
+            {isAnchoEspada ? 'Ancho de Espada' : 'Ancho de Basto'}
           </span>
         )}
       </div>
