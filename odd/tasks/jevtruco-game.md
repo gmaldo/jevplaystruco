@@ -22,7 +22,7 @@ El Truco es un juego de cartas con información imperfecta, cálculo de probabil
 
 ## Task Checklist
 - [x] Task 1: Inicialización del proyecto Next.js con TypeScript, Tailwind CSS y dependencias base. (Route: direct inline. Verified: `npm run build` succeeds offline in 2.0s).
-- [ ] Task 2: Motor de reglas del Truco Argentino (baraja española de 40 cartas, jerarquía de cartas, cálculo de envido, resolución de manos y rondas).
+- [x] Task 2: Motor de reglas del Truco Argentino (baraja española de 40 cartas, jerarquía de cartas, cálculo de envido, resolución de manos y rondas). (Route: delegated direct. Commit: a25115c. Verified: 27/27 unit tests pass in node:test in 72ms).
 - [ ] Task 3: Motor de decisiones Jev (`/api/jev/decision` y cliente Jev con `@typesafe-ai/sdk` y fallback heurístico de inferencia probabilística).
 - [ ] Task 4: Estado del juego y máquina de turnos en React (gestión de manos, cantos de Envido/Truco, respuestas y contabilización de puntos).
 - [ ] Task 5: Componentes UI del juego (Tablero, Cartas Españolas con animaciones, Tanteador con fósforos, Controles de Canto y Acciones).
@@ -31,5 +31,6 @@ El Truco es un juego de cartas con información imperfecta, cálculo de probabil
 
 ## Verification Evidence & Next Step
 - Task 1: Verified via Next.js build compilation (`npm run build --webpack`). Clean exit code 0.
-- Next Step: Task 2 - Implementar motor de reglas del Truco Argentino y test suite con `node:test`.
+- Task 2: Verified via `node --test test/truco-rules.test.js`. 27 test cases passing (deck creation, hierarchy comparisons, envido combinations, 1st/2nd/3rd parda, ties, point constants). Commit `a25115c`.
+- Next Step: Task 3 - Implementar motor de decisiones Jev (`/api/jev/decision` y fallback heurístico).
 
