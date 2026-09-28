@@ -35,6 +35,15 @@ test('UI Components - Audio Controller', async (t) => {
     assert.strictEqual(typeof sounds.playCanto, 'function');
     assert.strictEqual(typeof sounds.playWin, 'function');
     assert.strictEqual(typeof sounds.playLose, 'function');
+    assert.strictEqual(typeof sounds.playCantoVoice, 'function');
+    assert.strictEqual(typeof sounds.playTruco, 'function');
+    assert.strictEqual(typeof sounds.playRetruco, 'function');
+    assert.strictEqual(typeof sounds.playValeCuatro, 'function');
+    assert.strictEqual(typeof sounds.playEnvido, 'function');
+    assert.strictEqual(typeof sounds.playRealEnvido, 'function');
+    assert.strictEqual(typeof sounds.playFaltaEnvido, 'function');
+    assert.strictEqual(typeof sounds.playQuiero, 'function');
+    assert.strictEqual(typeof sounds.playNoQuiero, 'function');
 
     // Should not throw even when window/AudioContext is not present in Node
     assert.doesNotThrow(() => sounds.playCard());
@@ -42,12 +51,22 @@ test('UI Components - Audio Controller', async (t) => {
     assert.doesNotThrow(() => sounds.playCanto());
     assert.doesNotThrow(() => sounds.playWin());
     assert.doesNotThrow(() => sounds.playLose());
+    assert.doesNotThrow(() => sounds.playTruco());
+    assert.doesNotThrow(() => sounds.playRetruco());
+    assert.doesNotThrow(() => sounds.playValeCuatro());
+    assert.doesNotThrow(() => sounds.playEnvido());
+    assert.doesNotThrow(() => sounds.playRealEnvido());
+    assert.doesNotThrow(() => sounds.playFaltaEnvido());
+    assert.doesNotThrow(() => sounds.playQuiero());
+    assert.doesNotThrow(() => sounds.playNoQuiero());
+    assert.doesNotThrow(() => sounds.playCantoVoice('truco'));
   });
 
   await t.test('sound controller toggle works', () => {
     sounds.enabled = false;
     assert.strictEqual(sounds.enabled, false);
     assert.doesNotThrow(() => sounds.playCard());
+    assert.doesNotThrow(() => sounds.playTruco());
 
     sounds.enabled = true;
     assert.strictEqual(sounds.enabled, true);

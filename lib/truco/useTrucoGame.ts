@@ -10,6 +10,7 @@ import type {
 } from '../jev/types.ts';
 import { getJevDecision } from '../jev/client.ts';
 import { calculateEnvido } from './cards.ts';
+import { sounds } from '../sound/audio.ts';
 import {
   type MatchState,
   type EnvidoBid,
@@ -192,6 +193,7 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
         const envidoScore = calculateEnvido(jevCards).score;
         if (envidoScore >= 31) {
           console.log(`[JevTruco] 🤖 Jev canta Real Envido de primera (${envidoScore} tantos)`);
+          sounds.playRealEnvido();
           setState((current) =>
             machineCallEnvido(
               { ...current, isJevThinking: false },
@@ -202,6 +204,7 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
           return;
         } else if (envidoScore >= 28) {
           console.log(`[JevTruco] 🤖 Jev canta Envido de primera (${envidoScore} tantos)`);
+          sounds.playEnvido();
           setState((current) =>
             machineCallEnvido(
               { ...current, isJevThinking: false },
@@ -334,6 +337,11 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
             decision.choices?.envido_response?.choice ||
             'quiero') as 'quiero' | 'no_quiero' | 'real_envido' | 'falta_envido';
           console.log(`[JevTruco] 🤖 Jev responde al Envido: "${choice}"`);
+          if (choice === 'quiero') sounds.playQuiero();
+          else if (choice === 'no_quiero') sounds.playNoQuiero();
+          else if (choice === 'real_envido') sounds.playRealEnvido();
+          else if (choice === 'falta_envido') sounds.playFaltaEnvido();
+          else sounds.playEnvido();
           return machineRespondEnvido(stateWithDecision, choice);
         }
 
@@ -342,6 +350,10 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
             decision.choices?.truco_response?.choice ||
             'quiero') as 'quiero' | 'no_quiero' | 'retruco' | 'vale_cuatro';
           console.log(`[JevTruco] 🤖 Jev responde al Truco: "${choice}"`);
+          if (choice === 'quiero') sounds.playQuiero();
+          else if (choice === 'no_quiero') sounds.playNoQuiero();
+          else if (choice === 'retruco') sounds.playRetruco();
+          else if (choice === 'vale_cuatro') sounds.playValeCuatro();
           return machineRespondTruco(stateWithDecision, choice);
         }
 
@@ -353,6 +365,7 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
 
           if (wantTruco) {
             console.log(`[JevTruco] 🤖 Jev canta ¡TRUCO! antes de jugar carta`);
+            sounds.playTruco();
             return machineCallTruco(stateWithDecision, 'jev');
           }
 
@@ -364,6 +377,7 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
 
           if (cardToPlay) {
             console.log(`[JevTruco] 🤖 Jev juega carta: ${cardToPlay.name}`);
+            sounds.playCard();
             return playJevCard(stateWithDecision, cardToPlay);
           }
         }

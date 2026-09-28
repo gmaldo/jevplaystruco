@@ -76,7 +76,7 @@ class SoundController {
     } catch {}
   }
 
-  // Truco / Envido call sound (resonant chime)
+  // Truco / Envido call sound (resonant chime fallback)
   playCanto() {
     if (!this.enabled) return;
     const ctx = this.getContext();
@@ -100,6 +100,64 @@ class SoundController {
       osc.start(now);
       osc.stop(now + 0.36);
     } catch {}
+  }
+
+  // Vocal cantos playback (TRUCO, RETRUCO, VALE CUATRO, ENVIDO, REAL ENVIDO, FALTA ENVIDO, QUIERO, NO QUIERO)
+  playCantoVoice(
+    canto:
+      | 'truco'
+      | 'retruco'
+      | 'vale_cuatro'
+      | 'envido'
+      | 'real_envido'
+      | 'falta_envido'
+      | 'quiero'
+      | 'no_quiero'
+  ) {
+    if (!this.enabled || typeof window === 'undefined') return;
+    try {
+      const src = `/sounds/cantos/${canto}.wav`;
+      const audio = new Audio(src);
+      audio.volume = 0.95;
+      audio.play().catch(() => {
+        // Fallback to chime if browser suppresses autoplay or audio element
+        this.playCanto();
+      });
+    } catch {
+      this.playCanto();
+    }
+  }
+
+  playTruco() {
+    this.playCantoVoice('truco');
+  }
+
+  playRetruco() {
+    this.playCantoVoice('retruco');
+  }
+
+  playValeCuatro() {
+    this.playCantoVoice('vale_cuatro');
+  }
+
+  playEnvido() {
+    this.playCantoVoice('envido');
+  }
+
+  playRealEnvido() {
+    this.playCantoVoice('real_envido');
+  }
+
+  playFaltaEnvido() {
+    this.playCantoVoice('falta_envido');
+  }
+
+  playQuiero() {
+    this.playCantoVoice('quiero');
+  }
+
+  playNoQuiero() {
+    this.playCantoVoice('no_quiero');
   }
 
   // Trick / Hand win celebration fanfare

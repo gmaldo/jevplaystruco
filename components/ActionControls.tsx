@@ -110,7 +110,7 @@ export function ActionControls({
         {/* QUIERO */}
         <button
           onClick={() => {
-            sounds.playCanto();
+            sounds.playQuiero();
             onRespondTruco('quiero');
           }}
           className="px-4 py-2 rounded-xl font-serif font-bold text-sm bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-950/50 active:scale-95 transition-all cursor-pointer"
@@ -121,7 +121,7 @@ export function ActionControls({
         {/* NO QUIERO */}
         <button
           onClick={() => {
-            sounds.playCanto();
+            sounds.playNoQuiero();
             onRespondTruco('no_quiero');
           }}
           className="px-4 py-2 rounded-xl font-serif font-bold text-sm bg-rose-700 hover:bg-rose-600 text-white shadow-md shadow-rose-950/50 active:scale-95 transition-all cursor-pointer"
@@ -133,7 +133,7 @@ export function ActionControls({
         {currentBid === 'truco' && (
           <button
             onClick={() => {
-              sounds.playCanto();
+              sounds.playRetruco();
               onRespondTruco('retruco');
             }}
             className="px-4 py-2 rounded-xl font-serif font-bold text-sm bg-amber-600 hover:bg-amber-500 text-white shadow-md shadow-amber-950/50 active:scale-95 transition-all cursor-pointer"
@@ -146,7 +146,7 @@ export function ActionControls({
         {currentBid === 'retruco' && (
           <button
             onClick={() => {
-              sounds.playCanto();
+              sounds.playValeCuatro();
               onRespondTruco('vale_cuatro');
             }}
             className="px-4 py-2 rounded-xl font-serif font-bold text-sm bg-purple-600 hover:bg-purple-500 text-white shadow-md shadow-purple-950/50 active:scale-95 transition-all cursor-pointer"
@@ -159,7 +159,7 @@ export function ActionControls({
         {canEnvido && (
           <button
             onClick={() => {
-              sounds.playCanto();
+              sounds.playEnvido();
               onCallEnvido('envido');
             }}
             className="px-4 py-2 rounded-xl font-serif font-bold text-sm bg-blue-700 hover:bg-blue-600 text-white shadow-md shadow-blue-950/50 active:scale-95 transition-all cursor-pointer"
@@ -183,7 +183,7 @@ export function ActionControls({
         {/* QUIERO */}
         <button
           onClick={() => {
-            sounds.playCanto();
+            sounds.playQuiero();
             onRespondEnvido('quiero');
           }}
           className="px-4 py-2 rounded-xl font-serif font-bold text-sm bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-950/50 active:scale-95 transition-all cursor-pointer"
@@ -194,7 +194,7 @@ export function ActionControls({
         {/* NO QUIERO */}
         <button
           onClick={() => {
-            sounds.playCanto();
+            sounds.playNoQuiero();
             onRespondEnvido('no_quiero');
           }}
           className="px-4 py-2 rounded-xl font-serif font-bold text-sm bg-rose-700 hover:bg-rose-600 text-white shadow-md shadow-rose-950/50 active:scale-95 transition-all cursor-pointer"
@@ -210,11 +210,17 @@ export function ActionControls({
               : bid === 'real_envido'
               ? '🌾 ¡REAL ENVIDO!'
               : '⚡ ¡FALTA ENVIDO!';
+          const playAudio =
+            bid === 'real_envido'
+              ? () => sounds.playRealEnvido()
+              : bid === 'falta_envido'
+              ? () => sounds.playFaltaEnvido()
+              : () => sounds.playEnvido();
           return (
             <button
               key={bid}
               onClick={() => {
-                sounds.playCanto();
+                playAudio();
                 onCallEnvido(bid);
               }}
               className="px-4 py-2 rounded-xl font-serif font-bold text-sm bg-blue-700 hover:bg-blue-600 text-white shadow-md shadow-blue-950/50 active:scale-95 transition-all cursor-pointer"
@@ -262,7 +268,9 @@ export function ActionControls({
                     <button
                       key={bid}
                       onClick={() => {
-                        sounds.playCanto();
+                        if (bid === 'real_envido') sounds.playRealEnvido();
+                        else if (bid === 'falta_envido') sounds.playFaltaEnvido();
+                        else sounds.playEnvido();
                         setShowEnvidoMenu(false);
                         onCallEnvido(bid);
                       }}
@@ -281,7 +289,9 @@ export function ActionControls({
         {canTruco && availableTrucoBid && (
           <button
             onClick={() => {
-              sounds.playCanto();
+              if (availableTrucoBid === 'truco') sounds.playTruco();
+              else if (availableTrucoBid === 'retruco') sounds.playRetruco();
+              else if (availableTrucoBid === 'vale_cuatro') sounds.playValeCuatro();
               onCallTruco();
             }}
             className="px-3.5 py-2 rounded-xl font-serif font-bold text-xs sm:text-sm bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white border border-amber-400/50 shadow-md shadow-amber-950/50 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
