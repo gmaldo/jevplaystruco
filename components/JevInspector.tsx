@@ -27,12 +27,107 @@ interface HistoricalDecision {
   timestamp: string;
   round: number;
   summary: string;
+  explanation: string;
   latencyMs: number;
   mode: string;
   choices: HistoricalChoice[];
   confidence?: number;
   bluffProb?: number;
   handStrength?: number;
+}
+
+function generateDecisionExplanation(params: {
+  summary?: string;
+  choices: HistoricalChoice[];
+  bluffProb?: number;
+  handStrength?: number;
+  latencyMs: number;
+  mode: string;
+  round: number;
+}): string {
+  const { summary, choices, bluffProb, handStrength, latencyMs, mode, round } = params;
+
+  const cardChoice = choices.find((c) => c.key === 'card' || c.key === 'play_card');
+  const actionChoice = choices.find(
+    (c) => c.key === 'action' || c.key === 'envido_response' || c.key === 'truco_response'
+  );
+  const callChoice = choices.find((c) => c.key === 'call' || c.key === 'call_truco');
+
+  const parts: string[] = [];
+
+  // 1. Acciones / Naipes jugados
+  if (cardChoice) {
+    const conf = Math.round(cardChoice.confidence * 100);
+    const callText =
+      callChoice && callChoice.choice !== 'none'
+        ? ` tras cantar ${callChoice.formattedChoice}`
+        : '';
+    parts.push(
+      `Jev jugó ${cardChoice.formattedChoice}${callText} con ${conf}% de certeza en la ronda ${round}.`
+    );
+  } else if (actionChoice) {
+    const conf = Math.round(actionChoice.confidence * 100);
+    parts.push(`Jev respondió ${actionChoice.formattedChoice} (${conf}% de certeza).`);
+  } else if (callChoice && callChoice.choice !== 'none') {
+    parts.push(`Jev inició el canto con ${callChoice.formattedChoice}.`);
+  } else if (choices.length > 0) {
+    parts.push(
+      `Jev ejecutó ${choices[0].formattedChoice} (${Math.round(choices[0].confidence * 100)}% certeza).`
+    );
+  }
+
+  // 2. Justificación por jerarquía y fuerza de mano
+  if (typeof handStrength === 'number') {
+    if (handStrength >= 75) {
+      parts.push(
+        `Fuerza de mano alta (${Math.round(handStrength)}/100): cuenta con jerarquía de naipes suficiente para buscar ganar la baza.`
+      );
+    } else if (handStrength >= 45) {
+      parts.push(
+        `Fuerza de mano moderada (${Math.round(handStrength)}/100): administra sus cartas para el desenlace de la mano.`
+      );
+    } else {
+      parts.push(
+        `Fuerza de mano modesta (${Math.round(handStrength)}/100): prioriza descarte o tanteo con cartas bajas.`
+      );
+    }
+  }
+
+  // 3. Análisis de farol táctico
+  if (typeof bluffProb === 'number') {
+    if (bluffProb >= 0.5) {
+      parts.push(
+        `🎭 Farol táctico (${Math.round(bluffProb * 100)}%): jugada psicológica agresiva buscando la retirada del rival.`
+      );
+    } else if (bluffProb >= 0.2) {
+      parts.push(`Factor de farol moderado (${Math.round(bluffProb * 100)}%).`);
+    } else {
+      parts.push(
+        `Jugada sincera y fundamentada con apenas ${Math.round(bluffProb * 100)}% de probabilidad de engaño.`
+      );
+    }
+  }
+
+  // 4. Si el sumario contiene heurísticas específicas del simulador que aportan detalle, conservarlas
+  if (
+    summary &&
+    !summary.startsWith('Decisión Jev') &&
+    !summary.includes('live en') &&
+    summary !== 'Decisión ejecutada'
+  ) {
+    if (!parts.some((p) => p.includes(summary))) {
+      parts.unshift(summary);
+    }
+  }
+
+  // 5. Explicación de la inferencia (latencia y conexión)
+  const engineNote =
+    mode === 'live_api'
+      ? `Inferencia en vivo procesada en ${latencyMs}ms por el modelo Jev (System One).`
+      : `Decisión simulada localmente en ${latencyMs}ms.`;
+  parts.push(engineNote);
+
+  return parts.join(' ');
 }
 
 function formatChoiceName(choiceKey: string, choiceVal: string): { label: string; text: string } {
@@ -153,11 +248,28 @@ export function JevInspector({
         item.scores?.hand_confidence?.score ??
         item.scores?.hand_strength?.score;
 
+      const explanation = generateDecisionExplanation({
+        summary: item.decisionSummary,
+        choices,
+        bluffProb,
+        handStrength,
+        latencyMs: item.latencyMs,
+        mode: item.mode,
+        round: state.round,
+      });
+
+      let summary = item.decisionSummary || 'Decisión ejecutada';
+      if ((!item.decisionSummary || item.decisionSummary.startsWith('Decisión Jev')) && choices.length > 0) {
+        const primary = choices[0];
+        summary = `Jev ejecuta ${primary.label}: ${primary.formattedChoice} (${Math.round((primary.confidence || 1) * 100)}% certeza) • ${item.mode === 'live_api' ? 'Live API' : 'Simulador'}`;
+      }
+
       return {
         id: `hist-${index}-${item.latencyMs}`,
         timestamp: `#${index + 1}`,
         round: state.round,
-        summary: item.decisionSummary || 'Decisión ejecutada',
+        summary,
+        explanation,
         latencyMs: item.latencyMs,
         mode: item.mode,
         choices,
@@ -339,13 +451,23 @@ export function JevInspector({
               {decision ? (
                 <>
                   {/* Summary Card */}
-                  <div className="rounded-xl bg-stone-900 border border-cyan-800/40 p-3 shadow-md">
-                    <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-wider block mb-1">
+                  <div className="rounded-xl bg-stone-900 border border-cyan-800/40 p-3 shadow-md space-y-2">
+                    <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-wider block">
                       Resumen de Decisión
                     </span>
                     <p className="text-sm font-serif font-bold text-stone-100">
                       &quot;{decision.decisionSummary}&quot;
                     </p>
+                    {historicalEntries[0]?.explanation && (
+                      <div className="p-2.5 rounded-lg bg-amber-950/20 border border-amber-900/40 text-xs text-stone-300 leading-relaxed font-sans space-y-1">
+                        <span className="text-amber-400 font-semibold text-[11px] flex items-center gap-1.5">
+                          <span>💡</span> Explicación táctica:
+                        </span>
+                        <p className="text-stone-300 leading-relaxed">
+                          {historicalEntries[0].explanation}
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Choice Confidence Meters */}
@@ -605,6 +727,23 @@ export function JevInspector({
                       </div>
 
                       <p className="text-stone-200 text-xs font-medium leading-relaxed">{item.summary}</p>
+
+                      {/* Explicación de la jugada */}
+                      {item.explanation && (
+                        <div className="p-2.5 rounded-lg bg-amber-950/20 border border-amber-900/40 space-y-1">
+                          <div className="flex items-center justify-between text-[11px] font-semibold text-amber-300">
+                            <span className="flex items-center gap-1.5">
+                              <span>💡</span> Explicación de la jugada:
+                            </span>
+                            <span className="text-[10px] font-mono text-stone-400 font-normal">
+                              {item.mode === 'live_api' ? `Live (${item.latencyMs}ms)` : `Simulador (${item.latencyMs}ms)`}
+                            </span>
+                          </div>
+                          <p className="text-stone-300 text-xs leading-relaxed font-sans">
+                            {item.explanation}
+                          </p>
+                        </div>
+                      )}
 
                       {/* Respuestas de la jugada y probabilidades */}
                       {item.choices.length > 0 && (

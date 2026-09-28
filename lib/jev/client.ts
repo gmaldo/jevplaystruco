@@ -185,19 +185,113 @@ export async function getJevDecision(
       }
     }
 
+function formatCardDisplay(cardId: string): string {
+  const match = cardId.match(/(?:card[-_])?(\d+)[-_](\w+)/);
+  if (match) {
+    const [, val, suit] = match;
+    const suitEmoji =
+      suit === 'espada' ? '⚔️' : suit === 'basto' ? '🌿' : suit === 'oro' ? '🪙' : '🍷';
+    return `${val} de ${suit} ${suitEmoji}`;
+  }
+  return cardId;
+}
+
+function generateLiveDecisionSummary(
+  request: JevDecisionRequest,
+  choices: Record<string, { choice: string; confidence: number }>,
+  nouls: Record<string, { probability: number }>,
+  scores: Record<string, { score: number }>,
+  latencyMs: number,
+  model: string
+): string {
+  const cardChoice = choices.card || choices.play_card;
+  const actionChoice = choices.action || choices.envido_response || choices.truco_response;
+  const callChoice = choices.call || choices.call_truco;
+  const handStrength = scores.hand_confidence?.score ?? scores.hand_strength?.score;
+  const bluffProb = nouls.bluffing_probability?.probability ?? nouls.bluff_call?.probability;
+
+  const strengthPart =
+    typeof handStrength === 'number'
+      ? `fuerza evaluada en ${Math.round(handStrength)}/100`
+      : '';
+  const bluffPart =
+    typeof bluffProb === 'number' && bluffProb >= 0.4
+      ? `farol táctico ${Math.round(bluffProb * 100)}%`
+      : '';
+  const metaDetail = [strengthPart, bluffPart].filter(Boolean).join(', ');
+
+  if (request.context === 'play_card' && cardChoice) {
+    const cardName = formatCardDisplay(cardChoice.choice);
+    const conf = Math.round((cardChoice.confidence || 1) * 100);
+    const callPrefix =
+      callChoice && callChoice.choice !== 'none'
+        ? `canta ¡${callChoice.choice.toUpperCase()}! y `
+        : '';
+    return `Jev ${callPrefix}juega ${cardName} (${conf}% certeza) en ronda ${request.state.round}${
+      metaDetail ? ` • ${metaDetail}` : ''
+    } [Inferencia live ${model} en ${latencyMs}ms]`;
+  }
+
+  if (request.context === 'respond_truco' && actionChoice) {
+    const conf = Math.round((actionChoice.confidence || 1) * 100);
+    const act = actionChoice.choice;
+    const actionLabel =
+      act === 'quiero'
+        ? 'acepta el Truco (¡Quiero!)'
+        : act === 'no_quiero'
+        ? 'se va al mazo (No Quiero)'
+        : act === 'retruco'
+        ? 'redobla la apuesta a ¡Retruco!'
+        : act === 'vale_cuatro'
+        ? 'redobla al máximo con ¡Vale Cuatro!'
+        : `decide ${act}`;
+    return `Jev ${actionLabel} (${conf}% certeza)${
+      metaDetail ? ` • ${metaDetail}` : ''
+    } [Inferencia live ${model} en ${latencyMs}ms]`;
+  }
+
+  if (request.context === 'respond_envido' && actionChoice) {
+    const conf = Math.round((actionChoice.confidence || 1) * 100);
+    const act = actionChoice.choice;
+    const actionLabel =
+      act === 'quiero'
+        ? 'acepta el Envido (¡Quiero!)'
+        : act === 'no_quiero'
+        ? 'declina el Envido (No Quiero)'
+        : act === 'real_envido'
+        ? 'sube la apuesta a ¡Real Envido!'
+        : act === 'falta_envido'
+        ? 'sube la apuesta a ¡Falta Envido!'
+        : `decide ${act}`;
+    return `Jev ${actionLabel} (${conf}% certeza)${
+      metaDetail ? ` • ${metaDetail}` : ''
+    } [Inferencia live ${model} en ${latencyMs}ms]`;
+  }
+
+  if (request.context === 'initiate_call' && actionChoice) {
+    const act = actionChoice.choice;
+    if (act === 'none') {
+      return `Jev decide pasar sin cantar en este turno [Inferencia live ${model} en ${latencyMs}ms]`;
+    }
+    const conf = Math.round((actionChoice.confidence || 1) * 100);
+    return `Jev canta ¡${act.toUpperCase()}! (${conf}% certeza)${
+      metaDetail ? ` • ${metaDetail}` : ''
+    } [Inferencia live ${model} en ${latencyMs}ms]`;
+  }
+
+  return `Decisión Jev (${model}) resuelta en ${latencyMs}ms mediante inferencia System One.`;
+}
+
     let decisionSummary = data.decisionSummary;
-    if (!decisionSummary) {
-      if (request.context === 'play_card' && choices.card) {
-        decisionSummary = `Jev juega ${choices.card.choice} (confianza ${Math.round(
-          (choices.card.confidence || 1) * 100
-        )}%)`;
-      } else if (choices.action) {
-        decisionSummary = `Jev decide ${choices.action.choice} (confianza ${Math.round(
-          (choices.action.confidence || 1) * 100
-        )}%)`;
-      } else {
-        decisionSummary = `Decisión Jev (${model}) live en ${latencyMs}ms`;
-      }
+    if (!decisionSummary || decisionSummary.startsWith('Decisión Jev')) {
+      decisionSummary = generateLiveDecisionSummary(
+        request,
+        choices,
+        nouls,
+        scores,
+        latencyMs,
+        model
+      );
     }
 
     return {
