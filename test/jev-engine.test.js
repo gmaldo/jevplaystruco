@@ -501,6 +501,78 @@ describe('Jev Decision Engine - Probabilities & Composition', () => {
   });
 });
 
+describe('Jev Decision Engine - Unified Opening Call (single request)', () => {
+  it('emits opening_call question and decision when availableCalls are provided', () => {
+    // Strong hand: 1 espada + 3 copa, truco legal → should sing truco in the same request
+    const state = {
+      hand: [getCard(1, 'espada'), getCard(3, 'copa'), getCard(4, 'oro')],
+      allCardsJev: [getCard(1, 'espada'), getCard(3, 'copa'), getCard(4, 'oro')],
+      round: 1,
+      envidoPlayed: true,
+      trucoLevel: 0,
+      tableTricks: [],
+      currentBid: null,
+      score: { player: 0, jev: 0, target: 30 },
+      mano: 'jev',
+      availableCalls: ['truco'],
+    };
+
+    let trucoCalls = 0;
+    for (let i = 0; i < 20; i++) {
+      const decision = simulateJevDecision({ state, context: 'play_card' });
+      assert.ok(decision.choices.opening_call, 'play_card must emit opening_call when calls are legal');
+      assert.ok(decision.questions.choices.opening_call.criteria.truco);
+      assert.ok(decision.questions.choices.opening_call.criteria.none);
+      if (decision.choices.opening_call.choice === 'truco') trucoCalls++;
+    }
+    assert.ok(trucoCalls >= 15, `Expected mostly truco openings with a strong hand, got ${trucoCalls}/20`);
+  });
+
+  it('emits no opening_call when availableCalls is empty or absent', () => {
+    const state = {
+      hand: [getCard(4, 'copa'), getCard(5, 'espada'), getCard(10, 'oro')],
+      round: 1,
+      tableTricks: [],
+      currentBid: null,
+      score: { player: 0, jev: 0, target: 30 },
+      mano: 'player',
+    };
+
+    const withoutField = simulateJevDecision({ state, context: 'play_card' });
+    assert.equal(withoutField.choices.opening_call, undefined);
+    assert.equal(withoutField.questions.choices.opening_call, undefined);
+
+    const empty = simulateJevDecision({
+      state: { ...state, availableCalls: [] },
+      context: 'play_card',
+    });
+    assert.equal(empty.choices.opening_call, undefined);
+  });
+
+  it('opens envido through play_card when it is legal and tantos are high', () => {
+    const state = {
+      hand: [getCard(7, 'espada'), getCard(6, 'espada'), getCard(4, 'copa')],
+      allCardsJev: [getCard(7, 'espada'), getCard(6, 'espada'), getCard(4, 'copa')],
+      round: 1,
+      envidoPlayed: false,
+      trucoLevel: 0,
+      tableTricks: [],
+      currentBid: null,
+      score: { player: 0, jev: 0, target: 30 },
+      mano: 'jev',
+      availableCalls: ['envido', 'real_envido', 'falta_envido', 'truco'],
+    };
+
+    let envidoCalls = 0;
+    for (let i = 0; i < 20; i++) {
+      const decision = simulateJevDecision({ state, context: 'play_card' });
+      const choice = decision.choices.opening_call.choice;
+      if (choice === 'envido' || choice === 'real_envido') envidoCalls++;
+    }
+    assert.ok(envidoCalls >= 18, `Expected envido/real_envido openings with 33 tantos, got ${envidoCalls}/20`);
+  });
+});
+
 describe('Jev Client & Graceful Fallback', () => {
   it('falls back to local simulator when no API key is provided', async () => {
     const request = {

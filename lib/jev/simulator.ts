@@ -11,6 +11,7 @@ import type {
   JevDecisionResponse,
   JevState,
   JevDecisionQuestions,
+  ChoiceQuestion,
 } from './types.ts';
 
 const HAND_STRENGTH_LEVELS = [
@@ -104,26 +105,50 @@ export function buildQuestionsForContext(
         },
       };
 
-    case 'play_card':
-      return {
-        choices: {
-          card: {
-            instructions:
-              'Which card from `hand` should Jev play this trick? `computed.cardRanks` lists each card with its truco rank (14 = strongest). Use `playerCardOnTable`, `computed.canBeatPlayerCard` and `computed.trickRecord` to decide.',
-            criteria: state.hand.reduce<Record<string, string | null>>((acc, card) => {
-              acc[card.id] = `Play the ${card.name} (truco rank ${card.rank})`;
-              return acc;
-            }, {}),
-          },
-          call: {
-            instructions:
-              'Should Jev call Truco before playing, given `computed.maxRank`, `computed.trickRecord` and `score`?',
-            criteria: {
-              truco: 'Call Truco when holding card advantage or trick control',
-              none: 'Do not call, just play the card',
-            },
+    case 'play_card': {
+      const choices: Record<string, ChoiceQuestion> = {
+        card: {
+          instructions:
+            'Which card from `hand` should Jev play this trick? `computed.cardRanks` lists each card with its truco rank (14 = strongest). Use `playerCardOnTable`, `computed.canBeatPlayerCard` and `computed.trickRecord` to decide.',
+          criteria: state.hand.reduce<Record<string, string | null>>((acc, card) => {
+            acc[card.id] = `Play the ${card.name} (truco rank ${card.rank})`;
+            return acc;
+          }, {}),
+        },
+        call: {
+          instructions:
+            'Should Jev call Truco before playing, given `computed.maxRank`, `computed.trickRecord` and `score`?',
+          criteria: {
+            truco: 'Call Truco when holding card advantage or trick control',
+            none: 'Do not call, just play the card',
           },
         },
+      };
+
+      if (state.availableCalls && state.availableCalls.length > 0) {
+        const descriptions: Record<string, string> = {
+          envido: 'Call Envido first (2 points)',
+          envido_envido: 'Stack another Envido on the rival\'s call',
+          real_envido: 'Call Real Envido (3 points)',
+          falta_envido: `Call Falta Envido (worth ${state.computed?.faltaEnvidoValue ?? 'the remaining'} points)`,
+          truco: 'Call TRUCO (2 points) to pressure or define the hand',
+          retruco: 'Call QUIERO RETRUCO (3 points) to raise the stakes',
+          vale_cuatro: 'Call VALE CUATRO (4 points) to play for the maximum',
+        };
+        const criteria: Record<string, string | null> = {};
+        for (const call of state.availableCalls) {
+          criteria[call] = descriptions[call] || `Call ${call}`;
+        }
+        criteria.none = 'Pass without calling and just play a card';
+        choices.opening_call = {
+          instructions:
+            'Before playing, should Jev open one of the legal calls in `availableCalls`? Weigh `computed.envidoPoints`, `computed.cardRanks`, `computed.trickRecord` and `score`.',
+          criteria,
+        };
+      }
+
+      return {
+        choices,
         nouls: {
           call_truco: {
             instructions:
@@ -143,6 +168,7 @@ export function buildQuestionsForContext(
           },
         },
       };
+    }
 
     case 'initiate_call': {
       const criteria: Record<string, string | null> = {};
@@ -504,6 +530,24 @@ function handlePlayCard(state: JevState): Omit<JevDecisionResponse, 'mode' | 'la
     ['truco', 'none']
   );
 
+  // Unified opening call: when the caller reports legal calls, decide
+  // envido / truco / raises in the same evaluation as the card play.
+  let openingCallResult: ReturnType<typeof choiceWithProbabilities> | undefined;
+  if (state.availableCalls && state.availableCalls.length > 0) {
+    const opening = decideOpeningCall(state);
+    const openingChoice = state.availableCalls.includes(opening.choice)
+      ? opening.choice
+      : 'none';
+    openingCallResult = choiceWithProbabilities(
+      openingChoice,
+      opening.confidence,
+      [...state.availableCalls, 'none']
+    );
+    if (openingChoice !== 'none') {
+      summary = `${opening.summary} ${summary}`;
+    }
+  }
+
   return {
     choices: {
       action: cardResult,
@@ -511,6 +555,7 @@ function handlePlayCard(state: JevState): Omit<JevDecisionResponse, 'mode' | 'la
       play_card: cardResult,
       call: callResult,
       call_truco: callResult,
+      ...(openingCallResult ? { opening_call: openingCallResult } : {}),
     },
     nouls: {
       call_truco: { probability: shouldInitiateTruco ? 0.82 : 0.12 },
@@ -524,10 +569,20 @@ function handlePlayCard(state: JevState): Omit<JevDecisionResponse, 'mode' | 'la
   };
 }
 
+interface OpeningCallDecision {
+  choice: string;
+  confidence: number;
+  bluffProb: number;
+  handConfidence: number;
+  summary: string;
+}
+
 /**
- * Handles Jev decision when initiating a call (Envido or Truco).
+ * Decides which call (Envido / Truco / raises) Jev should open this turn,
+ * or 'none'. Shared by the `initiate_call` context and by `play_card`
+ * when the caller reports legal calls via `state.availableCalls`.
  */
-function handleInitiateCall(state: JevState): Omit<JevDecisionResponse, 'mode' | 'latencyMs'> {
+function decideOpeningCall(state: JevState): OpeningCallDecision {
   const envidoCards = getJevEnvidoCards(state);
   const envidoResult = calculateEnvido(envidoCards);
   const envido = envidoResult.score;
@@ -751,10 +806,18 @@ function handleInitiateCall(state: JevState): Omit<JevDecisionResponse, 'mode' |
     handConfidence = Math.min(100, Math.round((maxRank / 14) * 70));
   }
 
+  return { choice, confidence, bluffProb, handConfidence, summary };
+}
+
+/**
+ * Handles Jev decision when initiating a call (Envido or Truco).
+ */
+function handleInitiateCall(state: JevState): Omit<JevDecisionResponse, 'mode' | 'latencyMs'> {
+  const decided = decideOpeningCall(state);
   const questions = buildQuestionsForContext('initiate_call', state);
   const actionResult = choiceWithProbabilities(
-    choice,
-    confidence,
+    decided.choice,
+    decided.confidence,
     Object.keys(questions.choices?.action?.criteria || {})
   );
 
@@ -764,12 +827,12 @@ function handleInitiateCall(state: JevState): Omit<JevDecisionResponse, 'mode' |
       call: actionResult,
     },
     nouls: {
-      bluffing_probability: { probability: bluffProb },
+      bluffing_probability: { probability: decided.bluffProb },
     },
     scores: {
-      hand_confidence: { score: handConfidence },
+      hand_confidence: { score: decided.handConfidence },
     },
-    decisionSummary: summary,
+    decisionSummary: decided.summary,
     questions,
   };
 }

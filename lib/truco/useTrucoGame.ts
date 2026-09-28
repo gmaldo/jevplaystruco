@@ -170,14 +170,12 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
       }
 
       // Determine context
-      let context: JevDecisionRequest['context'] = 'play_card';
-      if (state.phase === 'envido_called') {
-        context = 'respond_envido';
-      } else if (state.phase === 'truco_called') {
-        context = 'respond_truco';
-      } else {
-        context = 'play_card';
-      }
+      const context: JevDecisionRequest['context'] =
+        state.phase === 'envido_called'
+          ? 'respond_envido'
+          : state.phase === 'truco_called'
+          ? 'respond_truco'
+          : 'play_card';
 
       console.log(`[JevTruco] 🤖 Turno de Jev (${context}). Preparando consulta a Jev...`);
 
@@ -243,6 +241,20 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
         trucoOfferedBy: state.trucoState.bidBy || null,
       };
 
+      // Legal opening calls are part of the state, so the card play and the
+      // call decision are answered in a single System One request.
+      if (context === 'play_card') {
+        const calls: string[] = [];
+        if (canCallEnvido(state, 'jev')) {
+          calls.push(
+            ...getAvailableEnvidoBids(state, 'jev').filter((b) => b !== 'none')
+          );
+        }
+        const trucoBid = getAvailableTrucoBid(state, 'jev');
+        if (trucoBid) calls.push(trucoBid);
+        jevState.availableCalls = calls;
+      }
+
       const fetchJevDecision = async (
         ctx: JevDecisionRequest['context'],
         st: JevState
@@ -286,59 +298,6 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
           return fallbackDec;
         }
       };
-
-      // Todas las decisiones de canto las toma el modelo (contexto initiate_call).
-      // Solo se consulta cuando hay al menos un canto legal; el modelo elige entre
-      // envido / real_envido / falta_envido / truco / none.
-      if (context === 'play_card' && (canCallEnvido(state, 'jev') || canCallTruco(state, 'jev'))) {
-        const initDecision = await fetchJevDecision('initiate_call', jevState);
-
-        if (activeRequestIdRef.current !== currentRequestId) {
-          return;
-        }
-
-        const initChoice =
-          initDecision.choices?.action?.choice || initDecision.choices?.call?.choice || 'none';
-
-        if (
-          (initChoice === 'envido' ||
-            initChoice === 'real_envido' ||
-            initChoice === 'falta_envido') &&
-          canCallEnvido(state, 'jev') &&
-          getAvailableEnvidoBids(state, 'jev').includes(initChoice as EnvidoBid)
-        ) {
-          console.log(`[JevTruco] 🤖 Jev inicia canto (modelo): "${initChoice}"`);
-          setDecisionHistory((prev) => [initDecision, ...prev.slice(0, 29)]);
-          if (initChoice === 'envido') sounds.playEnvido();
-          else if (initChoice === 'real_envido') sounds.playRealEnvido();
-          else sounds.playFaltaEnvido();
-          setState((current) =>
-            machineCallEnvido(
-              { ...current, isJevThinking: false, lastJevDecision: initDecision },
-              'jev',
-              initChoice as EnvidoBid
-            )
-          );
-          return;
-        }
-
-        const availableTruco = getAvailableTrucoBid(state, 'jev');
-        const isTrucoCall =
-          initChoice === 'truco' || initChoice === 'retruco' || initChoice === 'vale_cuatro';
-
-        if (isTrucoCall && canCallTruco(state, 'jev') && availableTruco) {
-          console.log(`[JevTruco] 🤖 Jev inicia canto (modelo): "${availableTruco}"`);
-          setDecisionHistory((prev) => [initDecision, ...prev.slice(0, 29)]);
-          if (availableTruco === 'retruco') sounds.playRetruco();
-          else if (availableTruco === 'vale_cuatro') sounds.playValeCuatro();
-          else sounds.playTruco();
-          setState((current) =>
-            machineCallTruco({ ...current, isJevThinking: false, lastJevDecision: initDecision }, 'jev')
-          );
-          return;
-        }
-        // initChoice === 'none' o ilegal → se sigue a la decisión de carta (play_card) abajo.
-      }
 
       const decision = await fetchJevDecision(context, jevState);
 
@@ -386,8 +345,37 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
         }
 
         if (context === 'play_card') {
-          // El canto (truco/envido) ya lo decidió el modelo en el paso initiate_call.
-          // Acá solo se juega la carta elegida por el modelo.
+          // El canto de apertura (envido/truco/raises) se resolvió en la misma
+          // consulta que la carta: se aplica primero si es legal, y la carta
+          // se juega en el próximo turno de Jev.
+          const openingCall =
+            decision.choices?.opening_call?.choice ||
+            decision.choices?.call?.choice ||
+            'none';
+
+          const envidoCalls = ['envido', 'envido_envido', 'real_envido', 'falta_envido'];
+          if (
+            envidoCalls.includes(openingCall) &&
+            canCallEnvido(current, 'jev') &&
+            getAvailableEnvidoBids(current, 'jev').includes(openingCall as EnvidoBid)
+          ) {
+            console.log(`[JevTruco] 🤖 Jev inicia canto (modelo): "${openingCall}"`);
+            if (openingCall === 'real_envido') sounds.playRealEnvido();
+            else if (openingCall === 'falta_envido') sounds.playFaltaEnvido();
+            else sounds.playEnvido();
+            return machineCallEnvido(stateWithDecision, 'jev', openingCall as EnvidoBid);
+          }
+
+          const trucoCalls = ['truco', 'retruco', 'vale_cuatro'];
+          const availableTruco = getAvailableTrucoBid(current, 'jev');
+          if (trucoCalls.includes(openingCall) && availableTruco) {
+            console.log(`[JevTruco] 🤖 Jev inicia canto (modelo): "${availableTruco}"`);
+            if (availableTruco === 'retruco') sounds.playRetruco();
+            else if (availableTruco === 'vale_cuatro') sounds.playValeCuatro();
+            else sounds.playTruco();
+            return machineCallTruco(stateWithDecision, 'jev');
+          }
+
           const cardChoice =
             decision.choices?.card?.choice || decision.choices?.action?.choice;
           const cardToPlay =

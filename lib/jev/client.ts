@@ -324,7 +324,7 @@ function generateLiveDecisionSummary(
 ): string {
   const cardChoice = choices.card || choices.play_card;
   const actionChoice = choices.action || choices.envido_response || choices.truco_response;
-  const callChoice = choices.call || choices.call_truco;
+  const callChoice = choices.opening_call || choices.call || choices.call_truco;
   const handStrength = scores.hand_confidence?.score ?? scores.hand_strength?.score;
   const bluffProb = nouls.bluffing_probability?.probability ?? nouls.bluff_call?.probability;
 

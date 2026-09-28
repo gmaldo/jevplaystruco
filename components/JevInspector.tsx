@@ -54,7 +54,9 @@ function formatDecisionNarrative(params: {
   const actionChoice = choices.find(
     (c) => c.key === 'action' || c.key === 'envido_response' || c.key === 'truco_response'
   );
-  const callChoice = choices.find((c) => c.key === 'call' || c.key === 'call_truco');
+  const callChoice = choices.find(
+    (c) => c.key === 'call' || c.key === 'call_truco' || c.key === 'opening_call'
+  );
 
   const strengthPart = typeof handStrength === 'number' ? Math.round(handStrength) : 50;
   const bluffPart = typeof bluffProb === 'number' ? Math.round(bluffProb * 100) : 5;
@@ -194,7 +196,9 @@ function generateDecisionExplanation(params: {
   const actionChoice = choices.find(
     (c) => c.key === 'action' || c.key === 'envido_response' || c.key === 'truco_response'
   );
-  const callChoice = choices.find((c) => c.key === 'call' || c.key === 'call_truco');
+  const callChoice = choices.find(
+    (c) => c.key === 'call' || c.key === 'call_truco' || c.key === 'opening_call'
+  );
 
   const parts: string[] = [];
 
@@ -291,7 +295,7 @@ function formatChoiceName(choiceKey: string, choiceVal: string): { label: string
     return { label: 'Carta Jugada', text: choiceVal };
   }
 
-  if (choiceKey === 'call' || choiceKey === 'call_truco') {
+  if (choiceKey === 'call' || choiceKey === 'call_truco' || choiceKey === 'opening_call') {
     if (choiceVal === 'truco') return { label: 'Canto', text: '¡TRUCO! 📢' };
     if (choiceVal === 'retruco') return { label: 'Canto', text: '¡QUIERO RETRUCO! 🔥' };
     if (choiceVal === 'vale_cuatro') return { label: 'Canto', text: '¡VALE CUATRO! ⚡' };
@@ -355,7 +359,7 @@ export function JevInspector({
       }
 
       // Check call (if call was truco/retruco etc., or if it's not none)
-      const callVal = rawChoices.call || rawChoices.call_truco;
+      const callVal = rawChoices.opening_call || rawChoices.call || rawChoices.call_truco;
       if (callVal && callVal.choice !== 'none' && !chosenEntries.some((e) => e.val.choice === callVal.choice)) {
         chosenEntries.push({ key: 'call', val: callVal });
       }
