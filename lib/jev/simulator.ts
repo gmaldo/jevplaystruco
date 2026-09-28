@@ -118,17 +118,30 @@ export function buildQuestionsForContext(
         },
       };
 
-    case 'initiate_call':
+    case 'initiate_call': {
+      const criteria: Record<string, string | null> = {};
+
+      if (state.round === 1 && !state.envidoPlayed) {
+        criteria.envido = 'Cantar Envido inicial (2 puntos)';
+        criteria.real_envido = 'Cantar Real Envido inicial (3 puntos)';
+        criteria.falta_envido = 'Cantar Falta Envido';
+      }
+
+      if ((state.trucoLevel ?? 0) === 0) {
+        criteria.truco = 'Cantar ¡TRUCO! (2 puntos) para presionar o definir la mano';
+      } else if (state.trucoLevel === 1 && state.trucoOfferedBy !== 'jev') {
+        criteria.retruco = 'Cantar ¡QUIERO RETRUCO! (3 puntos) para subir la apuesta';
+      } else if (state.trucoLevel === 2 && state.trucoOfferedBy !== 'jev') {
+        criteria.vale_cuatro = 'Cantar ¡VALE CUATRO! (4 puntos) para jugar por el máximo';
+      }
+
+      criteria.none = 'Pasar sin cantar en este turno y jugar carta';
+
       return {
         choices: {
           action: {
             instructions: 'Iniciar un canto de Envido o Truco en el turno',
-            criteria: {
-              envido: 'Cantar Envido inicial con >=28 puntos',
-              real_envido: 'Cantar Real Envido inicial con >=31 puntos',
-              truco: 'Cantar Truco con cartas altas',
-              none: 'Pasar sin cantar',
-            },
+            criteria,
           },
         },
         nouls: {
@@ -143,6 +156,7 @@ export function buildQuestionsForContext(
           },
         },
       };
+    }
   }
 }
 
@@ -465,37 +479,221 @@ function handleInitiateCall(state: JevState): Omit<JevDecisionResponse, 'mode' |
   const maxRank = handDescending[0]?.rank ?? 0;
   const strongCards = handDescending.filter((c) => c.rank >= 10);
 
+  const playerCardOnTable =
+    state.playerCardOnTable ||
+    state.tableTricks.find((t) => t.trickNumber === state.round && t.playerCard && !t.jevCard)?.playerCard;
+
+  const canKillPlayerCard = playerCardOnTable
+    ? handDescending.some((c) => c.rank > playerCardOnTable.rank)
+    : false;
+
   let choice = 'none';
   let confidence = 0.85;
-  const bluffProb = 0.05;
+  let bluffProb = 0.05;
   let handConfidence = 50;
-  let summary = 'Jev pasa sin cantar en este turno.';
+  let summary = 'Jev pasa sin cantar en este turno y juega carta.';
 
-  if (!state.envidoPlayed && state.round === 1) {
-    if (envido >= 31) {
-      choice = 'real_envido';
-      confidence = 0.88;
-      handConfidence = 92;
-      summary = `Jev posee ${envido} puntos y decide cantar Real Envido.`;
-    } else if (envido >= 28) {
-      choice = 'envido';
-      confidence = 0.82;
-      handConfidence = 75;
-      summary = `Jev posee ${envido} puntos y decide cantar Envido.`;
+  // 1. Envido initiation (when state.round === 1 && !state.envidoPlayed)
+  if (state.round === 1 && !state.envidoPlayed) {
+    if (state.mano === 'jev') {
+      // Jev is mano
+      if (envido >= 31) {
+        choice = Math.random() < 0.75 ? 'real_envido' : 'envido';
+        confidence = 0.90;
+        handConfidence = 95;
+        bluffProb = 0.02;
+        summary = `Jev es mano con ${envido} puntos y canta ${choice === 'real_envido' ? 'Real Envido' : 'Envido'}.`;
+      } else if (envido >= 28) {
+        choice = 'envido';
+        confidence = 0.85;
+        handConfidence = 80;
+        bluffProb = 0.04;
+        summary = `Jev es mano con ${envido} puntos e inicia cantando Envido.`;
+      } else if (envido >= 26) {
+        if (Math.random() < 0.65) {
+          choice = 'envido';
+          confidence = 0.78;
+          handConfidence = 68;
+          bluffProb = 0.08;
+          summary = `Jev es mano con ${envido} puntos y decide cantar Envido con tantos competitivos.`;
+        }
+      } else {
+        if (Math.random() < 0.12) {
+          choice = 'envido';
+          confidence = 0.55;
+          handConfidence = 35;
+          bluffProb = 0.85;
+          summary = `Jev es mano con ${envido} puntos y lanza un farol táctico de Envido.`;
+        }
+      }
+    } else {
+      // Player is mano and already threw a card without singing envido
+      if (envido >= 29) {
+        choice = Math.random() < 0.60 ? 'real_envido' : 'envido';
+        confidence = 0.88;
+        handConfidence = 90;
+        bluffProb = 0.03;
+        summary = `El rival jugó sin cantar: Jev aprovecha con ${envido} puntos y canta ${choice === 'real_envido' ? 'Real Envido' : 'Envido'}.`;
+      } else if (envido >= 26) {
+        if (Math.random() < 0.85) {
+          choice = 'envido';
+          confidence = 0.82;
+          handConfidence = 75;
+          bluffProb = 0.05;
+          summary = `El rival no cantó Envido: Jev canta Envido con ${envido} puntos.`;
+        }
+      } else if (envido >= 24) {
+        if (Math.random() < 0.50) {
+          choice = 'envido';
+          confidence = 0.70;
+          handConfidence = 60;
+          bluffProb = 0.15;
+          summary = `Jev prueba suerte cantando Envido con ${envido} puntos tras omisión del rival.`;
+        }
+      } else {
+        if (Math.random() < 0.15) {
+          choice = 'envido';
+          confidence = 0.50;
+          handConfidence = 30;
+          bluffProb = 0.80;
+          summary = `Farol de Envido: Jev canta Envido con ${envido} puntos buscando robar el punto.`;
+        }
+      }
+    }
+  }
+
+  // 2. Truco initiation (when choice === 'none')
+  if (choice === 'none') {
+    const isTrucoLevelZero = (state.trucoLevel ?? 0) === 0;
+    const canRaiseRetruco = state.trucoLevel === 1 && state.trucoOfferedBy !== 'jev';
+    const canRaiseValeCuatro = state.trucoLevel === 2 && state.trucoOfferedBy !== 'jev';
+    const trick1Winner = state.tableTricks[0]?.winner;
+
+    if (isTrucoLevelZero) {
+      if (state.round === 1) {
+        if (playerCardOnTable && canKillPlayerCard && (playerCardOnTable.rank <= 5 || maxRank >= 10)) {
+          if (Math.random() < 0.75) {
+            choice = 'truco';
+            confidence = 0.85;
+            handConfidence = Math.min(100, 70 + maxRank * 2);
+            bluffProb = 0.05;
+            summary = `Jev puede matar el ${playerCardOnTable.name} del rival y canta ¡TRUCO! antes de tirar su carta.`;
+          }
+        }
+        if (choice === 'none' && (maxRank >= 12 || strongCards.length >= 2)) {
+          if (Math.random() < 0.80) {
+            choice = 'truco';
+            confidence = 0.88;
+            handConfidence = 85;
+            bluffProb = 0.04;
+            summary = `Jev posee cartas mayores (máx jerarquía ${maxRank}) y canta ¡TRUCO! de primera.`;
+          }
+        }
+        if (choice === 'none' && Math.random() < 0.10) {
+          choice = 'truco';
+          confidence = 0.55;
+          handConfidence = 35;
+          bluffProb = 0.85;
+          summary = 'Jev mete un farol táctico cantando ¡TRUCO! de primera con mano débil.';
+        }
+      } else if (state.round === 2) {
+        if (trick1Winner === 'jev') {
+          // "El que hace primera manda el truco": Jev has dominant position!
+          if (maxRank >= 7) {
+            if (Math.random() < 0.90) {
+              choice = 'truco';
+              confidence = 0.90;
+              handConfidence = Math.min(100, 75 + maxRank * 2);
+              bluffProb = 0.03;
+              summary = `Jev ganó la primera baza ("el que hace primera manda el truco") y canta ¡TRUCO! con jerarquía ${maxRank}.`;
+            }
+          } else {
+            if (Math.random() < 0.60) {
+              choice = 'truco';
+              confidence = 0.72;
+              handConfidence = 60;
+              bluffProb = 0.55;
+              summary = 'Jev ganó primera y mete presión con ¡TRUCO! aprovechando la ventaja psicológica.';
+            }
+          }
+        } else if (trick1Winner === 'tie') {
+          // Whoever wins trick 2 wins hand!
+          if (maxRank >= 8 || state.mano === 'jev') {
+            if (Math.random() < 0.80) {
+              choice = 'truco';
+              confidence = 0.84;
+              handConfidence = 80;
+              bluffProb = 0.05;
+              summary = `Primera baza parda: Jev canta ¡TRUCO! para definir la mano en segunda (${state.mano === 'jev' ? 'ventaja de mano' : `jerarquía ${maxRank}`}).`;
+            }
+          } else if (maxRank >= 6) {
+            if (Math.random() < 0.50) {
+              choice = 'truco';
+              confidence = 0.70;
+              handConfidence = 65;
+              bluffProb = 0.20;
+              summary = 'Primera baza parda: Jev canta ¡TRUCO! disputando la segunda baza con naipe medio.';
+            }
+          }
+        } else if (trick1Winner === 'player') {
+          if (playerCardOnTable && canKillPlayerCard && maxRank >= 9) {
+            if (Math.random() < 0.60) {
+              choice = 'truco';
+              confidence = 0.75;
+              handConfidence = 70;
+              bluffProb = 0.10;
+              summary = `Jev puede matar el ${playerCardOnTable.name} del rival en segunda baza y canta ¡TRUCO! para igualar.`;
+            }
+          }
+        }
+      } else if (state.round === 3) {
+        // Final baza!
+        if (maxRank >= 6) {
+          if (Math.random() < 0.85) {
+            choice = 'truco';
+            confidence = 0.86;
+            handConfidence = Math.min(100, 70 + maxRank * 3);
+            bluffProb = 0.05;
+            summary = `Tercera y última baza: Jev canta ¡TRUCO! para definir el juego con carta de jerarquía ${maxRank}.`;
+          }
+        } else {
+          if (Math.random() < 0.35) {
+            choice = 'truco';
+            confidence = 0.52;
+            handConfidence = 35;
+            bluffProb = 0.85;
+            summary = 'Baza definitiva: Jev canta ¡TRUCO! de farol buscando que el rival se retire.';
+          }
+        }
+      }
+    } else if (canRaiseRetruco) {
+      if (trick1Winner === 'jev' || maxRank >= 10 || canKillPlayerCard) {
+        if (Math.random() < 0.75) {
+          choice = 'retruco';
+          confidence = 0.85;
+          handConfidence = Math.min(100, 75 + maxRank * 2);
+          bluffProb = 0.04;
+          summary = `Jev tiene posición dominante (${trick1Winner === 'jev' ? 'ganó primera' : `carta fuerte ${maxRank}`}) y canta ¡QUIERO RETRUCO!`;
+        }
+      }
+    } else if (canRaiseValeCuatro) {
+      if (maxRank >= 11 || (trick1Winner === 'jev' && maxRank >= 9)) {
+        if (Math.random() < 0.70) {
+          choice = 'vale_cuatro';
+          confidence = 0.90;
+          handConfidence = Math.min(100, 85 + maxRank * 2);
+          bluffProb = 0.03;
+          summary = 'Jev va por todo con cartas bravas y canta ¡VALE CUATRO!';
+        }
+      }
     }
   }
 
   if (choice === 'none') {
-    const trucoNotCalled =
-      !state.trucoLevel &&
-      (!state.currentBid || (state.currentBid.type !== 'truco' && state.currentBid.type !== 'retruco' && state.currentBid.type !== 'vale_cuatro'));
-
-    if (trucoNotCalled && (strongCards.length >= 2 || maxRank >= 12)) {
-      choice = 'truco';
-      confidence = 0.80;
-      handConfidence = 80;
-      summary = `Jev tiene cartas altas e inicia el canto de Truco.`;
-    }
+    summary = 'Jev pasa sin cantar en este turno y juega carta.';
+    confidence = 0.85;
+    bluffProb = 0.05;
+    handConfidence = Math.min(100, Math.round((maxRank / 14) * 70));
   }
 
   const questions = buildQuestionsForContext('initiate_call', state);

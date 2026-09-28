@@ -373,3 +373,163 @@ describe('Next.js API Route - POST /api/jev/decision', () => {
     assert.ok(data.error.includes('Invalid context'));
   });
 });
+
+describe('Jev Decision Engine - Proactive Canto Initiation (initiate_call)', () => {
+  it('builds dynamic criteria based on round, envidoPlayed, and trucoLevel', () => {
+    const baseState = {
+      hand: [getCard(7, 'espada'), getCard(6, 'espada'), getCard(4, 'copa')],
+      score: { player: 0, jev: 0, target: 30 },
+      mano: 'jev',
+      tableTricks: [],
+    };
+
+    // Round 1, envido not played, truco level 0
+    const q1 = buildQuestionsForContext('initiate_call', {
+      ...baseState,
+      round: 1,
+      envidoPlayed: false,
+      trucoLevel: 0,
+    });
+    const crit1 = q1.choices.action.criteria;
+    assert.ok(crit1.envido, 'Must offer envido in round 1');
+    assert.ok(crit1.real_envido, 'Must offer real_envido in round 1');
+    assert.ok(crit1.falta_envido, 'Must offer falta_envido in round 1');
+    assert.ok(crit1.truco, 'Must offer truco when level is 0');
+    assert.ok(crit1.none, 'Must offer none');
+    assert.equal(crit1.retruco, undefined);
+    assert.equal(crit1.vale_cuatro, undefined);
+
+    // Round 2, envido played, truco level 0
+    const q2 = buildQuestionsForContext('initiate_call', {
+      ...baseState,
+      round: 2,
+      envidoPlayed: true,
+      trucoLevel: 0,
+    });
+    const crit2 = q2.choices.action.criteria;
+    assert.equal(crit2.envido, undefined, 'Envido must not be offered in round 2');
+    assert.ok(crit2.truco, 'Must offer truco in round 2 when level is 0');
+
+    // Round 2, truco accepted (level 1), player offered truco
+    const q3 = buildQuestionsForContext('initiate_call', {
+      ...baseState,
+      round: 2,
+      envidoPlayed: true,
+      trucoLevel: 1,
+      trucoOfferedBy: 'player',
+    });
+    const crit3 = q3.choices.action.criteria;
+    assert.ok(crit3.retruco, 'Must offer retruco when truco was accepted from player');
+    assert.equal(crit3.truco, undefined);
+    assert.equal(crit3.vale_cuatro, undefined);
+
+    // Round 2, retruco accepted (level 2), player offered retruco
+    const q4 = buildQuestionsForContext('initiate_call', {
+      ...baseState,
+      round: 2,
+      envidoPlayed: true,
+      trucoLevel: 2,
+      trucoOfferedBy: 'player',
+    });
+    const crit4 = q4.choices.action.criteria;
+    assert.ok(crit4.vale_cuatro, 'Must offer vale_cuatro when retruco was accepted from player');
+    assert.equal(crit4.retruco, undefined);
+  });
+
+  it('initiates envido in round 1 with high tantos (33 puntos)', () => {
+    const state = {
+      hand: [getCard(7, 'espada'), getCard(6, 'espada'), getCard(4, 'copa')],
+      allCardsJev: [getCard(7, 'espada'), getCard(6, 'espada'), getCard(4, 'copa')],
+      round: 1,
+      envidoPlayed: false,
+      trucoLevel: 0,
+      tableTricks: [],
+      score: { player: 0, jev: 0, target: 30 },
+      mano: 'jev',
+    };
+
+    let calledEnvido = 0;
+    for (let i = 0; i < 20; i++) {
+      const decision = simulateJevDecision({ state, context: 'initiate_call' });
+      const choice = decision.choices.action.choice;
+      if (choice === 'envido' || choice === 'real_envido') {
+        calledEnvido++;
+      }
+      assert.ok(decision.scores.hand_confidence.score >= 90);
+    }
+    assert.equal(calledEnvido, 20, 'Should always initiate envido or real_envido with 33 as mano');
+  });
+
+  it('initiates truco in round 2 when Jev won trick 1', () => {
+    const state = {
+      hand: [getCard(2, 'espada'), getCard(4, 'copa')],
+      round: 2,
+      envidoPlayed: true,
+      trucoLevel: 0,
+      tableTricks: [
+        { trickNumber: 1, playerCard: getCard(4, 'espada'), jevCard: getCard(7, 'espada'), winner: 'jev' },
+      ],
+      score: { player: 0, jev: 0, target: 30 },
+      mano: 'player',
+    };
+
+    let trucoCalls = 0;
+    for (let i = 0; i < 30; i++) {
+      const decision = simulateJevDecision({ state, context: 'initiate_call' });
+      if (decision.choices.action.choice === 'truco') {
+        trucoCalls++;
+      }
+    }
+    assert.ok(trucoCalls >= 20, 'Jev should shout truco majority of the time after winning trick 1 (el que hace primera manda)');
+  });
+
+  it('initiates retruco when truco level is 1 and Jev has strong position', () => {
+    const state = {
+      hand: [getCard(1, 'espada'), getCard(4, 'copa')],
+      round: 2,
+      envidoPlayed: true,
+      trucoLevel: 1,
+      trucoOfferedBy: 'player',
+      tableTricks: [
+        { trickNumber: 1, playerCard: getCard(4, 'espada'), jevCard: getCard(7, 'espada'), winner: 'jev' },
+      ],
+      score: { player: 0, jev: 0, target: 30 },
+      mano: 'player',
+    };
+
+    let retrucoCalls = 0;
+    for (let i = 0; i < 30; i++) {
+      const decision = simulateJevDecision({ state, context: 'initiate_call' });
+      if (decision.choices.action.choice === 'retruco') {
+        retrucoCalls++;
+      }
+    }
+    assert.ok(retrucoCalls >= 15, 'Jev should shout retruco when holding Ancho de Espada and winning trick 1');
+  });
+
+  it('initiates vale cuatro when truco level is 2 and Jev has cartas bravas', () => {
+    const state = {
+      hand: [getCard(1, 'espada')],
+      round: 3,
+      envidoPlayed: true,
+      trucoLevel: 2,
+      trucoOfferedBy: 'player',
+      tableTricks: [
+        { trickNumber: 1, playerCard: getCard(4, 'espada'), jevCard: getCard(7, 'espada'), winner: 'jev' },
+        { trickNumber: 2, playerCard: getCard(3, 'copa'), jevCard: getCard(4, 'copa'), winner: 'player' },
+      ],
+      score: { player: 0, jev: 0, target: 30 },
+      mano: 'player',
+    };
+
+    let valeCuatroCalls = 0;
+    for (let i = 0; i < 30; i++) {
+      const decision = simulateJevDecision({ state, context: 'initiate_call' });
+      if (decision.choices.action.choice === 'vale_cuatro') {
+        valeCuatroCalls++;
+      }
+    }
+    assert.ok(valeCuatroCalls >= 15, 'Jev should shout vale cuatro with Ancho de Espada in trick 3');
+  });
+});
+

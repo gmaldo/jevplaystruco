@@ -322,10 +322,16 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
           return;
         }
 
-        if (initChoice === 'truco' && canCallTruco(state, 'jev')) {
-          console.log(`[JevTruco] 🤖 Jev inicia canto (modelo): "truco"`);
+        const availableTruco = getAvailableTrucoBid(state, 'jev');
+        const isTrucoCall =
+          initChoice === 'truco' || initChoice === 'retruco' || initChoice === 'vale_cuatro';
+
+        if (isTrucoCall && canCallTruco(state, 'jev') && availableTruco) {
+          console.log(`[JevTruco] 🤖 Jev inicia canto (modelo): "${availableTruco}"`);
           setDecisionHistory((prev) => [initDecision, ...prev.slice(0, 29)]);
-          sounds.playTruco();
+          if (availableTruco === 'retruco') sounds.playRetruco();
+          else if (availableTruco === 'vale_cuatro') sounds.playValeCuatro();
+          else sounds.playTruco();
           setState((current) =>
             machineCallTruco({ ...current, isJevThinking: false, lastJevDecision: initDecision }, 'jev')
           );

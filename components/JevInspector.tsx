@@ -140,9 +140,19 @@ function formatDecisionNarrative(params: {
       headline = `⚡ Se aceptó el Truco • Respuesta de Jev: ¡QUIERO! ✅ (${confPct}% confianza)`;
       why = `Jev aceptó el Truco porque disponía de cartas de jerarquía media/alta suficientes para disputar o rematar las bazas restantes (fuerza de mano: ${strengthPart}/100).`;
     } else if (act === 'retruco' || act === 'vale_cuatro') {
-      const callName = act === 'retruco' ? '¡RETRUCO! 🔥' : '¡VALE CUATRO! ⚡';
-      headline = `⚡ Se redobló el Truco • Respuesta de Jev: ${callName} (${confPct}% confianza)`;
-      why = `Jev redobló la apuesta a ${act} respaldado por cartas mayores o bravas (fuerza de mano: ${strengthPart}/100) con el objetivo de maximizar puntos en la mano.`;
+      const callName = act === 'retruco' ? '¡QUIERO RETRUCO! 🔥' : '¡VALE CUATRO! ⚡';
+      if (
+        context === 'initiate_call' ||
+        summary.toLowerCase().includes('inicia') ||
+        summary.toLowerCase().includes('canta') ||
+        summary.toLowerCase().includes('iniciativa')
+      ) {
+        headline = `⚡ Se cantó ${callName} por iniciativa de Jev (${confPct}% confianza)`;
+        why = `Jev redobló la apuesta a ${act} respaldado por cartas mayores o bravas (fuerza de mano: ${strengthPart}/100) para definir y presionar en la mano.`;
+      } else {
+        headline = `⚡ Se redobló el Truco • Respuesta de Jev: ${callName} (${confPct}% confianza)`;
+        why = `Jev redobló la apuesta a ${act} respaldado por cartas mayores o bravas (fuerza de mano: ${strengthPart}/100) con el objetivo de maximizar puntos en la mano.`;
+      }
     } else if (act === 'truco') {
       headline = `⚡ Se cantó Truco por iniciativa de Jev (${confPct}% confianza)`;
       why = `Jev cantó Truco al evaluar que sus naipes le otorgan ventaja estratégica en las bazas de la mano (fuerza: ${strengthPart}/100).`;
@@ -283,7 +293,7 @@ function formatChoiceName(choiceKey: string, choiceVal: string): { label: string
 
   if (choiceKey === 'call' || choiceKey === 'call_truco') {
     if (choiceVal === 'truco') return { label: 'Canto', text: '¡TRUCO! 📢' };
-    if (choiceVal === 'retruco') return { label: 'Canto', text: '¡RETRUCO! 🔥' };
+    if (choiceVal === 'retruco') return { label: 'Canto', text: '¡QUIERO RETRUCO! 🔥' };
     if (choiceVal === 'vale_cuatro') return { label: 'Canto', text: '¡VALE CUATRO! ⚡' };
     if (choiceVal === 'envido') return { label: 'Canto', text: '¡ENVIDO! 🌾' };
     if (choiceVal === 'real_envido') return { label: 'Canto', text: '¡REAL ENVIDO! 🌾' };
@@ -300,8 +310,8 @@ function formatChoiceName(choiceKey: string, choiceVal: string): { label: string
     if (choiceVal === 'falta_envido') return { label: 'Respuesta', text: '¡FALTA ENVIDO! 💥' };
     if (choiceVal === 'envido_envido') return { label: 'Respuesta', text: '¡ENVIDO ENVIDO! 🌾' };
     if (choiceVal === 'truco') return { label: 'Canto', text: '¡TRUCO! 📢' };
-    if (choiceVal === 'retruco') return { label: 'Respuesta', text: '¡QUIERO RETRUCO! 🔥' };
-    if (choiceVal === 'vale_cuatro') return { label: 'Respuesta', text: '¡QUIERO VALE CUATRO! ⚡' };
+    if (choiceVal === 'retruco') return { label: 'Canto', text: '¡QUIERO RETRUCO! 🔥' };
+    if (choiceVal === 'vale_cuatro') return { label: 'Canto', text: '¡VALE CUATRO! ⚡' };
     if (choiceVal === 'none') return { label: 'Acción', text: 'Pasar sin cantar ⏩' };
     return { label: 'Respuesta', text: choiceVal };
   }
