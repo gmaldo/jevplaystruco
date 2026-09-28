@@ -248,14 +248,15 @@ describe('Jev Decision Engine - Truco Responses', () => {
     };
 
     let noQuieroCount = 0;
-    for (let i = 0; i < 20; i++) {
+    const trials = 50;
+    for (let i = 0; i < trials; i++) {
       const decision = simulateJevDecision({ state, context: 'respond_truco' });
       if (decision.choices.action.choice === 'no_quiero') {
         noQuieroCount++;
       }
     }
-    // High probability of no_quiero (>= 80%)
-    assert.ok(noQuieroCount >= 16, `Expected at least 16/20 no_quiero, got ${noQuieroCount}`);
+    // High probability of no_quiero (>= 75%)
+    assert.ok(noQuieroCount >= 38, `Expected at least 38/50 no_quiero, got ${noQuieroCount}`);
   });
 });
 

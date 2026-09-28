@@ -88,4 +88,5 @@ export interface JevDecisionResponse {
   scores: Record<string, JevScoreResult>;
   decisionSummary: string;
   questions?: JevDecisionQuestions;
+  model?: string;
 }

@@ -60,7 +60,10 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
   );
   const [apiKey, setApiKey] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('TYPESAFE_API_KEY') || '';
+      const stored =
+        localStorage.getItem('JEV_API_KEY') ||
+        localStorage.getItem('TYPESAFE_API_KEY');
+      return stored || '';
     }
     return '';
   });
@@ -71,8 +74,10 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
     setApiKey(key);
     if (typeof window !== 'undefined') {
       if (key) {
+        localStorage.setItem('JEV_API_KEY', key);
         localStorage.setItem('TYPESAFE_API_KEY', key);
       } else {
+        localStorage.removeItem('JEV_API_KEY');
         localStorage.removeItem('TYPESAFE_API_KEY');
       }
     }
@@ -258,7 +263,11 @@ export function useTrucoGame(initialTarget: 15 | 30 = 30): UseTrucoGameReturn {
       try {
         const response = await fetch('/api/jev/decision', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-jev-api-key': apiKey,
+            Authorization: `Bearer ${apiKey}`,
+          },
           body: JSON.stringify({
             state: jevState,
             context,

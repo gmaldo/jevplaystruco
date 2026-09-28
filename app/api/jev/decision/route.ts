@@ -38,11 +38,29 @@ export async function POST(req: Request) {
     }
 
     const apiKey =
+      req.headers.get('x-jev-api-key') ||
       req.headers.get('x-typesafe-api-key') ||
       req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ||
+      (typeof requestObj.apiKey === 'string' && requestObj.apiKey ? requestObj.apiKey : undefined) ||
+      process.env.JEV_API_KEY ||
+      process.env.TYPESAFE_API_KEY ||
       undefined;
 
-    const decision = await getJevDecision(requestObj as unknown as JevDecisionRequest, apiKey);
+    const endpoint =
+      req.headers.get('x-jev-endpoint') ||
+      (typeof requestObj.endpoint === 'string' && requestObj.endpoint ? requestObj.endpoint : undefined) ||
+      undefined;
+
+    const model =
+      req.headers.get('x-jev-model') ||
+      (typeof requestObj.model === 'string' && requestObj.model ? requestObj.model : undefined) ||
+      undefined;
+
+    const decision = await getJevDecision(
+      requestObj as unknown as JevDecisionRequest,
+      apiKey,
+      { endpoint, model }
+    );
 
     return Response.json(decision);
   } catch (error: unknown) {

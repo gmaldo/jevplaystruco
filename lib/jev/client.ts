@@ -1,16 +1,53 @@
 import type { JevDecisionRequest, JevDecisionResponse } from './types.ts';
 import { simulateJevDecision, buildQuestionsForContext } from './simulator.ts';
 
+const DEFAULT_ENDPOINT = 'https://opencode.ai/zen/v1/systemone';
+const DEFAULT_MODEL = 'jev-1.13-free';
+const DEFAULT_API_KEY = '';
+
+export interface JevDecisionOptions {
+  endpoint?: string;
+  model?: string;
+}
+
 /**
  * Gets a decision from Jev:
- * - If apiKey or process.env.TYPESAFE_API_KEY is available, calls TypeSafe AI API with 3-second timeout.
+ * - If apiKey or process.env (JEV_API_KEY || TYPESAFE_API_KEY) is available, calls OpenCode Zen / TypeSafe AI API with 3-second timeout.
  * - If fetch fails, times out, or no API key, falls back gracefully to simulateJevDecision.
  */
 export async function getJevDecision(
   request: JevDecisionRequest,
-  apiKey?: string
+  apiKey?: string,
+  optionsOrEndpoint?: JevDecisionOptions | string,
+  modelOverride?: string
 ): Promise<JevDecisionResponse> {
-  const key = apiKey || (typeof process !== 'undefined' ? process.env.TYPESAFE_API_KEY : undefined);
+  let customEndpoint: string | undefined;
+  let customModel: string | undefined;
+
+  if (typeof optionsOrEndpoint === 'object' && optionsOrEndpoint !== null) {
+    customEndpoint = optionsOrEndpoint.endpoint;
+    customModel = optionsOrEndpoint.model;
+  } else if (typeof optionsOrEndpoint === 'string') {
+    customEndpoint = optionsOrEndpoint;
+    customModel = modelOverride;
+  }
+
+  const endpoint =
+    customEndpoint ||
+    (typeof process !== 'undefined' ? process.env.JEV_ENDPOINT : undefined) ||
+    DEFAULT_ENDPOINT;
+
+  const model =
+    customModel ||
+    (typeof process !== 'undefined' ? process.env.JEV_MODEL : undefined) ||
+    DEFAULT_MODEL;
+
+  const key =
+    apiKey ||
+    (typeof process !== 'undefined'
+      ? process.env.JEV_API_KEY || process.env.TYPESAFE_API_KEY
+      : undefined) ||
+    DEFAULT_API_KEY;
 
   if (!key) {
     return simulateJevDecision(request);
@@ -23,7 +60,7 @@ export async function getJevDecision(
 
     const questions = buildQuestionsForContext(request.context, request.state);
 
-    const res = await fetch('https://api.typesafe.ai/v1/systemone', {
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -31,6 +68,7 @@ export async function getJevDecision(
         'x-api-key': key,
       },
       body: JSON.stringify({
+        model,
         state: request.state,
         context: request.context,
         questions,
@@ -41,7 +79,7 @@ export async function getJevDecision(
     clearTimeout(timeoutId);
 
     if (!res.ok) {
-      throw new Error(`TypeSafe API responded with status ${res.status}: ${res.statusText}`);
+      throw new Error(`Jev API responded with status ${res.status}: ${res.statusText}`);
     }
 
     const data = await res.json();
@@ -53,8 +91,9 @@ export async function getJevDecision(
       choices: data.choices || {},
       nouls: data.nouls || {},
       scores: data.scores || {},
-      decisionSummary: data.decisionSummary || `Decisión TypeSafe AI live en ${latencyMs}ms`,
+      decisionSummary: data.decisionSummary || `Decisión Jev (${model}) live en ${latencyMs}ms`,
       questions: data.questions || questions,
+      model: data.model || model,
     };
   } catch {
     // Graceful fallback to calibrated local simulator
@@ -62,6 +101,7 @@ export async function getJevDecision(
     return {
       ...fallback,
       mode: 'local_simulator',
+      model,
     };
   }
 }

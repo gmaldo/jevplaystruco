@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import { sounds } from '../lib/sound/audio.ts';
 
+const DEFAULT_KEY = '';
+
 export interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -24,9 +26,15 @@ export function SettingsModal({
   soundEnabled,
   onToggleSound,
 }: SettingsModalProps) {
-  const [inputKey, setInputKey] = useState(apiKey);
+  const [inputKey, setInputKey] = useState(apiKey || DEFAULT_KEY);
+  const [prevApiKey, setPrevApiKey] = useState(apiKey);
   const [showKey, setShowKey] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  if (apiKey !== prevApiKey) {
+    setPrevApiKey(apiKey);
+    setInputKey(apiKey || DEFAULT_KEY);
+  }
 
   if (!isOpen) return null;
 
@@ -63,12 +71,12 @@ export function SettingsModal({
 
         {/* Body */}
         <div className="p-5 space-y-5 text-xs text-stone-300">
-          {/* Section 1: TypeSafe AI API Key */}
+          {/* Section 1: OpenCode Zen / TypeSafe Jev API Key */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="font-mono text-cyan-300 uppercase font-bold text-[11px] flex items-center gap-1.5">
                 <span>🔑</span>
-                <span>TypeSafe AI API Key</span>
+                <span>OpenCode Zen / TypeSafe Jev API Key</span>
               </label>
               {apiKey ? (
                 <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
@@ -82,8 +90,22 @@ export function SettingsModal({
             </div>
 
             <p className="text-[11px] text-stone-400">
-              Ingresa tu API Key de TypeSafe AI para realizar inferencias en vivo con el modelo Jev. Si se omite, se utilizará el simulador heurístico calibrado.
+              API Key para inferencias en vivo con el motor Jev a través de OpenCode Zen (System One). Si la llamada falla o se omite la clave, se utilizará el simulador heurístico calibrado.
             </p>
+
+            {/* Endpoint & Model Info */}
+            <div className="rounded-xl bg-stone-900/90 border border-stone-800 p-2.5 space-y-1.5 font-mono text-[11px]">
+              <div className="flex items-center justify-between text-stone-400">
+                <span>Endpoint:</span>
+                <span className="text-cyan-300 font-semibold truncate max-w-[240px]">
+                  https://opencode.ai/zen/v1/systemone
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-stone-400">
+                <span>Modelo:</span>
+                <span className="text-amber-300 font-semibold">jev-1.13-free</span>
+              </div>
+            </div>
 
             <form onSubmit={handleSave} className="space-y-2">
               <div className="relative">
@@ -91,7 +113,7 @@ export function SettingsModal({
                   type={showKey ? 'text' : 'password'}
                   value={inputKey}
                   onChange={(e) => setInputKey(e.target.value)}
-                  placeholder="ts_live_..."
+                  placeholder="Dejar vacío para usar clave del servidor"
                   className="w-full px-3 py-2 rounded-xl bg-stone-900 border border-stone-700 text-stone-100 font-mono text-xs focus:outline-hidden focus:border-cyan-500 pr-16"
                 />
                 <button
