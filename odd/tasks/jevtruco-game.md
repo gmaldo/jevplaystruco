@@ -24,7 +24,7 @@ El Truco es un juego de cartas con información imperfecta, cálculo de probabil
 - [x] Task 1: Inicialización del proyecto Next.js con TypeScript, Tailwind CSS y dependencias base. (Route: direct inline. Verified: `npm run build` succeeds offline in 2.0s).
 - [x] Task 2: Motor de reglas del Truco Argentino (baraja española de 40 cartas, jerarquía de cartas, cálculo de envido, resolución de manos y rondas). (Route: delegated direct. Commit: a25115c. Verified: 27/27 unit tests pass in node:test in 72ms).
 - [x] Task 3: Motor de decisiones Jev (`/api/jev/decision`, cliente Jev con soporte TypeSafe AI live y simulador heurístico calibrado). (Route: delegated direct. Commit: a6adb24. Verified: 17/17 unit tests in test/jev-engine.test.js pass, total 44/44 tests pass in 3.1s, Next.js production build succeeds).
-- [ ] Task 4: Estado del juego y máquina de turnos en React (gestión de manos, cantos de Envido/Truco, respuestas y contabilización de puntos).
+- [x] Task 4: Estado del juego y máquina de turnos en React (gestión de manos, cantos de Envido/Truco, respuestas y contabilización de puntos). (Route: delegated direct. Commit: 922ba58. Verified: 20/20 unit tests in test/game-machine.test.js pass, total 64/64 tests pass in 3.1s, Next.js production build succeeds).
 - [ ] Task 5: Componentes UI del juego (Tablero, Cartas Españolas con animaciones, Tanteador con fósforos, Controles de Canto y Acciones).
 - [ ] Task 6: Panel "Jev Inspector" (visor en vivo de llamadas a Jev: state, questions, choices, nouls, latencia y modo de conexión).
 - [ ] Task 7: Verificación completa de jugabilidad, tests unitarios del motor de Truco y build final.
@@ -32,6 +32,8 @@ El Truco es un juego de cartas con información imperfecta, cálculo de probabil
 ## Verification Evidence & Next Step
 - Task 1: Verified via Next.js build compilation (`npm run build --webpack`). Clean exit code 0.
 - Task 2: Verified via `node --test test/truco-rules.test.js`. 27 test cases passing (deck creation, hierarchy comparisons, envido combinations, 1st/2nd/3rd parda, ties, point constants). Commit `a25115c`.
-- Task 3: Verified via `node --test test/jev-engine.test.js` (17 test cases passing: question building, envido quiero/raise/no-quiero/bluffs, card killing/discarding, leading strategy, truco response, client fallback, and Next.js route handler) and `npm test` (44/44 tests passing). Next.js production build verified with dynamic route `/api/jev/decision`.
-- Next Step: Task 4 - Estado del juego y máquina de turnos en React (gestión de manos, cantos de Envido/Truco, respuestas y contabilización de puntos).
+- Task 3: Verified via `node --test test/jev-engine.test.js` (17 test cases passing: question building, envido quiero/raise/no-quiero/bluffs, card killing/discarding, leading strategy, truco response, client fallback, and Next.js route handler) and `npm test` (44/44 tests passing). Next.js production build verified with dynamic route `/api/jev/decision`. Commit `a6adb24`.
+- Task 4: Verified via `node --test test/game-machine.test.js` (20 test cases passing: match initialization, turn alternation, card play & trick resolution, parda turn handoff, envido flow quiero/no-quiero/raises, truco flow quiero/no-quiero/retruco/vale-cuatro, fold hand, match victory at target score 15/30, and action validators) and `npm test` (64/64 tests passing in 3.1s). Next.js production build verified with 0 errors. Commit `922ba58`.
+- Next Step: Task 5 - Componentes UI del juego (Tablero, Cartas Españolas con animaciones, Tanteador con fósforos, Controles de Canto y Acciones).
+
 
